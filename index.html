@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Photobooth</title>
+  <meta name="theme-color" content="#111111">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Photobooth">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body data-state="idle">
+  <main id="booth">
+    <div id="stage">
+      <video id="preview" playsinline muted autoplay></video>
+      <div id="countdown" aria-live="assertive"></div>
+      <div id="flash"></div>
+      <img id="result" alt="Your Grid" hidden>
+    </div>
+
+    <div id="progress" aria-hidden="true">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+
+    <div id="controls">
+      <button id="start" disabled>Start</button>
+      <div id="review-controls">
+        <button id="save" class="secondary">Save</button>
+        <button id="print" class="secondary" hidden>Print</button>
+        <button id="done">Done</button>
+      </div>
+      <p id="save-warning" class="warning" hidden>This Grid could not be saved on the device.</p>
+    </div>
+  </main>
+
+  <!-- Press and hold for a few seconds to open the Host panel -->
+  <div id="host-hotspot" aria-hidden="true"></div>
+
+  <section id="host" hidden>
+    <div class="host-card">
+      <header>
+        <h2>Host</h2>
+        <button id="host-close" class="secondary small">Close</button>
+      </header>
+      <p id="host-count"></p>
+
+      <h3>Export</h3>
+      <div id="share-batches"></div>
+      <p id="share-note" class="note" hidden>This browser can't open the share sheet with files — use the zip instead.</p>
+      <button id="zip" class="secondary">Download all as zip</button>
+
+      <h3>Backup</h3>
+      <label class="toggle">
+        <input type="checkbox" id="backup-toggle">
+        Also download each Grid to this device's Downloads folder as it's taken
+      </label>
+
+      <h3>Printing</h3>
+      <label class="toggle">
+        <input type="checkbox" id="print-toggle">
+        Show a Print button after each Turn (4 copies per A4 sheet)
+      </label>
+
+      <h3>Event</h3>
+      <button id="clear" class="danger">Clear &amp; start new Event</button>
+    </div>
+  </section>
+
+  <div id="message" hidden>
+    <p id="message-text"></p>
+    <button id="message-retry" class="small" hidden>Try again</button>
+  </div>
+
+  <div id="rotate">Please turn the device upright</div>
+
+  <!-- Filled in just before printing; only visible on paper -->
+  <div id="print-sheet"></div>
+</body>
+</html>
