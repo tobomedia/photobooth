@@ -175,6 +175,18 @@ body:not([data-state="idle"]) #guest-props { display: none; }
 #review-controls { display: none; gap: 16px; flex-wrap: wrap; justify-content: center; }
 .warning { color: #ffb4a8; margin: 0; }
 
+/* Stops a Turn part-way; only shown while one is running. */
+#cancel {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: 16px;
+  z-index: 4;
+  font-size: 1.2rem;
+  padding: 12px 28px;
+  background: rgba(40, 40, 40, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
 /* State-driven visibility */
 body[data-state="turn"] #progress { visibility: visible; }
 body[data-state="turn"] #start { visibility: hidden; }

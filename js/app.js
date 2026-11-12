@@ -35,6 +35,7 @@ const els = {
   start: $('start'),
   print: $('print'),
   done: $('done'),
+  cancel: $('cancel'),
   saveWarning: $('save-warning'),
   hotspot: $('host-hotspot'),
   host: $('host'),
@@ -73,7 +74,23 @@ let state = 'idle'; // idle | turn | review
 let reviewUrl = null;
 let facing = 'user'; // the camera in use: 'user' (front) or 'environment' (back)
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Waits are only used during a Turn, so Cancel can cut any of them short: they then
+// throw an AbortError, which stops the Turn.
+let turnAbort = null;
+const sleep = (ms) =>
+  new Promise((resolve, reject) => {
+    const signal = turnAbort?.signal;
+    if (signal?.aborted) return reject(new DOMException('Turn cancelled', 'AbortError'));
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Turn cancelled', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 
 function setState(next) {
   state = next;
@@ -166,10 +183,12 @@ async function onStart() {
   hideMessage();
   setState('turn');
   els.dots.forEach((d) => d.classList.remove('taken'));
-  await loadFonts(); // speech bubbles use the Grid font
+  turnAbort = new AbortController();
+  els.cancel.hidden = false;
+  const photos = [];
 
   try {
-    const photos = [];
+    await loadFonts(); // speech bubbles use the Grid font
     for (let i = 0; i < CONFIG.photosPerTurn; i++) {
       await revealProps(i);
       await countdown(CONFIG.countdownSeconds);
@@ -180,6 +199,9 @@ async function onStart() {
       els.dots[i].classList.add('taken');
       if (i < CONFIG.photosPerTurn - 1) await sleep(CONFIG.pauseBetweenPhotosMs);
     }
+    // All Photos taken: too late to cancel, the Grid is made and saved.
+    turnAbort = null;
+    els.cancel.hidden = true;
 
     await loadFonts();
     const canvas = composeGrid(photos, gridStyle());
@@ -201,12 +223,28 @@ async function onStart() {
     if (backupEnabled()) downloadFile(file); // second copy, outside the browser
     showReview(file, saved);
   } catch (err) {
-    console.error(err);
+    const cancelled = err.name === 'AbortError';
+    if (!cancelled) console.error(err);
+    photos.forEach((p) => (p.width = 0)); // nothing from this Turn is kept
+    turnAbort = null;
+    els.cancel.hidden = true;
     els.countdown.textContent = '';
     els.propCue.hidden = true;
+    els.dots.forEach((d) => d.classList.remove('taken'));
+    if (cancelled) {
+      guestPick = null; // start again fresh, as after a finished Turn
+      mixOrder = shuffleMix();
+      renderGuestProps();
+    }
     setState('idle');
-    showMessage('Something went wrong — tap Start to try again.', { timeoutMs: 5000 });
+    drawOverlay(0);
+    if (!cancelled) showMessage('Something went wrong — tap Start to try again.', { timeoutMs: 5000 });
   }
+}
+
+// Stops a Turn part-way through. Nothing is saved.
+function cancelTurn() {
+  turnAbort?.abort();
 }
 
 async function countdown(seconds) {
@@ -736,6 +774,7 @@ function registerServiceWorker() {
 
 els.start.addEventListener('click', onStart);
 els.done.addEventListener('click', endReview);
+els.cancel.addEventListener('click', cancelTurn);
 els.messageClose.addEventListener('click', hideMessage);
 document.getElementById('gallery-open').addEventListener('click', () => {
   if (state === 'idle') openGallery().catch((err) => showMessage(`Couldn't open the Grids: ${err.message}`, { timeoutMs: 5000 }));
