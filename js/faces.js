@@ -16,7 +16,9 @@ const MATCH_DISTANCE = 0.15; // a face this close to one from the last check is 
 let loading = null;
 let detector = null;
 let timer = null;
-let tracked = []; // [{ eyes: [{x,y},{x,y}], nose, mouth, top, size, seen }]
+// Each face keeps a `slot` (0, 1, 2…) while it stays in view, so speech bubbles and their
+// phrases stay with the same person.
+let tracked = []; // [{ eyes: [{x,y},{x,y}], nose, mouth, top, size, slot, seen }]
 let checkMs = null; // average time one check takes, for the Host panel
 
 export async function loadDetector() {
@@ -89,7 +91,7 @@ export const trackingActive = () => timer !== null;
 export const averageCheckMs = () => checkMs;
 
 // The faces right now, biggest first.
-export const currentFaces = () => tracked.map(({ eyes, nose, mouth, top, size }) => ({ eyes, nose, mouth, top, size }));
+export const currentFaces = () => tracked.map(({ eyes, nose, mouth, top, size, slot }) => ({ eyes, nose, mouth, top, size, slot }));
 
 function update(detections, video, mirrored) {
   const now = performance.now();
@@ -135,12 +137,21 @@ function update(detections, video, mirrored) {
       const dist = Math.hypot(o.nose.x - face.nose.x, o.nose.y - face.nose.y);
       if (dist < bestDist) [best, bestDist] = [i, dist];
     });
-    if (best < 0) return { ...face, seen: now };
+    if (best < 0) return { ...face, slot: null, seen: now };
     const [prev] = old.splice(best, 1);
-    return { ...blend(prev, face), seen: now };
+    return { ...blend(prev, face), slot: prev.slot, seen: now };
   });
   // Faces missed this time stay put briefly.
   for (const o of old) if (now - o.seen < FORGET_MS) next.push(o);
+  // New faces get the lowest slot nobody else is using.
+  const used = new Set(next.map((f) => f.slot));
+  for (const f of next) {
+    if (f.slot !== null) continue;
+    let slot = 0;
+    while (used.has(slot)) slot++;
+    f.slot = slot;
+    used.add(slot);
+  }
   tracked = next.sort((a, b) => b.size - a.size);
 }
 

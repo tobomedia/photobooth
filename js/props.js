@@ -69,6 +69,7 @@ function geometry(f, w, h) {
     up: { x: Math.sin(angle), y: -Math.cos(angle) },
     nose: { x: f.nose.x * w, y: f.nose.y * h },
     mouth: { x: f.mouth.x * w, y: f.mouth.y * h },
+    slot: f.slot ?? 0,
   };
 }
 
@@ -101,14 +102,13 @@ function wrap(ctx, text, maxWidth) {
   return best;
 }
 
-// A comic-style speech bubble: a white oval with a curved tail pointing at (tipX, tipY),
-// a bold outline and a solid drop shadow. `place(rx, ry)` gives the centre and tail tip
-// once the bubble's size is known; the bubble is kept inside the Photo.
-function bubble(ctx, text, place, { font, w, h, maxWidth }) {
+// Speech bubbles are measured first, then placed (and pushed apart so they don't overlap),
+// then drawn.
+function measureBubble(ctx, text, { font, w, maxWidth }) {
   let size = w * 0.06;
   const setFont = () => (ctx.font = `700 ${size}px ${font}`);
   setFont();
-  let lines = wrap(ctx, text, maxWidth);
+  const lines = wrap(ctx, text, maxWidth);
   let widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
   if (widest > maxWidth) {
     size *= maxWidth / widest; // still too long: shrink to fit
@@ -117,13 +117,100 @@ function bubble(ctx, text, place, { font, w, h, maxWidth }) {
   }
   const lineHeight = size * 1.15;
   const textHeight = lines.length * lineHeight;
-  const rx = (widest / 2) * 1.22 + size * 0.7;
-  const ry = (textHeight / 2) * 1.45 + size * 0.6;
-  const margin = w * 0.02;
-  let { cx, cy, tipX, tipY } = place(rx, ry);
-  cx = Math.min(Math.max(cx, rx + margin), w - rx - margin);
-  cy = Math.min(Math.max(cy, ry + margin), h - ry - margin);
+  return {
+    lines, size, font, lineHeight, textHeight,
+    rx: (widest / 2) * 1.22 + size * 0.7,
+    ry: (textHeight / 2) * 1.45 + size * 0.6,
+  };
+}
 
+// Keeps a bubble's oval inside the Photo.
+function clamp(b, w, h, margin) {
+  b.cx = Math.min(Math.max(b.cx, b.rx + margin), w - b.rx - margin);
+  b.cy = Math.min(Math.max(b.cy, b.ry + margin), h - b.ry - margin);
+}
+
+// Roughly where a head is (hair to chin), as an oval. Bubbles keep off heads, and tails
+// stop at their edge.
+function headOf(face) {
+  const c = above(face, -face.d * 0.35);
+  return { cx: c.x, cy: c.y, rx: face.d * 1.25, ry: face.d * 1.75 };
+}
+
+// How far two ovals overlap across and down, treated as boxes (not positive: they don't).
+function overlap(a, b, pad) {
+  return [a.rx + b.rx + pad - Math.abs(b.cx - a.cx), a.ry + b.ry + pad - Math.abs(b.cy - a.cy)];
+}
+
+// Moves bubbles until they overlap neither each other nor anyone's head, preferring
+// upwards (away from faces) and then sideways, within the Photo.
+function separate(bubbles, heads, w, h, margin) {
+  const pad = w * 0.015;
+  const roomAbove = (b) => b.cy - b.ry - margin;
+  for (let round = 0; round < 16; round++) {
+    let moved = false;
+    for (let i = 0; i < bubbles.length; i++) {
+      const a = bubbles[i];
+      // Off heads: up if the bubble is above the head's middle and there's room, else sideways.
+      for (const head of heads) {
+        const [ox, oy] = overlap(a, head, pad);
+        if (ox <= 0 || oy <= 0) continue;
+        moved = true;
+        const upBy = a.cy + a.ry + pad - (head.cy - head.ry);
+        if (a.cy < head.cy && roomAbove(a) >= upBy) a.cy -= upBy;
+        else a.cx += (a.cx < head.cx ? -1 : 1) * ox;
+      }
+      // Off each other: the higher one goes up if it can, else they move apart sideways.
+      for (let j = i + 1; j < bubbles.length; j++) {
+        const b = bubbles[j];
+        const [ox, oy] = overlap(a, b, pad);
+        if (ox <= 0 || oy <= 0) continue;
+        moved = true;
+        const upper = a.cy <= b.cy ? a : b;
+        if (oy < ox && roomAbove(upper) >= oy) {
+          upper.cy -= oy;
+        } else {
+          const sx = b.cx < a.cx ? -1 : 1;
+          a.cx -= (sx * ox) / 2;
+          b.cx += (sx * ox) / 2;
+        }
+      }
+    }
+    bubbles.forEach((b) => clamp(b, w, h, margin));
+    if (!moved) break;
+  }
+}
+
+// Where a bubble's tail ends: on the line from the bubble to the speaker's mouth, just
+// outside their head, so it points at the mouth without covering the face.
+function aimAt(b, face) {
+  const { mouth, d } = face;
+  const head = headOf(face);
+  const vx = mouth.x - b.cx;
+  const vy = mouth.y - b.cy;
+  const dist = Math.hypot(vx, vy) || 1;
+  const ux = vx / dist;
+  const uy = vy / dist;
+  const edge = 1 / Math.hypot(ux / b.rx, uy / b.ry); // bubble centre to its own outline
+  // Where the line enters the head oval: solve |(p + t·u − c) / r| = 1 for the nearer t.
+  const px = (b.cx - head.cx) / head.rx;
+  const py = (b.cy - head.cy) / head.ry;
+  const qx = ux / head.rx;
+  const qy = uy / head.ry;
+  const A = qx * qx + qy * qy;
+  const B = 2 * (px * qx + py * qy);
+  const C = px * px + py * py - 1;
+  const disc = B * B - 4 * A * C;
+  const entry = C > 0 && disc > 0 ? (-B - Math.sqrt(disc)) / (2 * A) : dist - d * 1.3;
+  let reach = Math.max(entry - d * 0.1, edge + d * 0.45); // always show some tail
+  reach = Math.min(reach, Math.max(dist - d * 0.4, edge + d * 0.15)); // never over the mouth
+  return { tipX: b.cx + ux * reach, tipY: b.cy + uy * reach };
+}
+
+// A comic-style speech bubble: a white oval with a curved tail pointing at (tipX, tipY),
+// a bold outline and a solid drop shadow.
+function drawBubble(ctx, b, tipX, tipY, w) {
+  const { cx, cy, rx, ry, lines, size, font, lineHeight, textHeight } = b;
   // Tail: leaves the oval on the side facing the tip, curving slightly.
   const angle = Math.atan2((tipY - cy) / ry, (tipX - cx) / rx);
   const spread = 0.28;
@@ -169,37 +256,57 @@ function bubble(ctx, text, place, { font, w, h, maxWidth }) {
   ctx.fill();
 
   ctx.fillStyle = '#111111';
+  ctx.font = `700 ${size}px ${font}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   lines.forEach((l, i) => ctx.fillText(l, cx, cy - textHeight / 2 + lineHeight * (i + 0.5) + size * 0.04));
 }
 
 function drawBubbles(ctx, w, h, { phrases, font, shot, faces }) {
-  const first = phrases[(shot * 2) % phrases.length];
-  const second = phrases[(shot * 2 + 1) % phrases.length];
+  const margin = w * 0.02;
   if (faces) {
-    // A bubble for each of the biggest three faces, above the head and to the outside.
-    const people = faces.slice(0, 3);
-    const maxWidth = w * (people.length > 1 ? 0.3 : 0.38);
-    people.forEach((face, i) => {
-      const text = phrases[(shot * 2 + i) % phrases.length];
-      const side = face.x < w / 2 ? -1 : 1;
-      const head = above(face, face.d * 1.7);
-      bubble(ctx, text, (rx, ry) => {
-        const gap = face.d * 0.5;
-        if (head.y - gap - ry * 2 > w * 0.02) {
-          return { cx: head.x + side * face.d * 0.7, cy: head.y - gap - ry, tipX: head.x + side * face.d * 0.2, tipY: head.y - face.d * 0.1 };
-        }
-        // No room above: beside the head instead.
-        return { cx: face.x + side * (face.d * 1.4 + rx), cy: face.y - face.d * 0.6, tipX: face.x + side * face.d * 1.1, tipY: face.y - face.d * 0.2 };
-      }, { font, w, h, maxWidth });
+    // Up to three people get a bubble: the ones who've been in view longest (lowest slot),
+    // so bubbles and phrases stay with the same people while they're there.
+    const people = [...faces].sort((a, b) => a.slot - b.slot).slice(0, 3);
+    const maxWidth = w * [0.38, 0.38, 0.32, 0.28][people.length];
+    const heads = faces.map(headOf);
+    const bubbles = people.map((face) => {
+      const text = phrases[(shot * 2 + face.slot) % phrases.length];
+      const b = measureBubble(ctx, text, { font, w, maxWidth });
+      const head = headOf(face);
+      const top = head.cy - head.ry;
+      const gap = face.d * 0.7;
+      if (top - gap - b.ry * 2 > margin) {
+        // Above the head, a little to the outside of the picture.
+        b.cx = head.cx + (face.x < w / 2 ? -1 : 1) * face.d * 0.9;
+        b.cy = top - gap - b.ry;
+      } else {
+        // No room above: beside the head, on whichever side has more space.
+        const side = face.x > w - face.x ? -1 : 1;
+        b.cx = head.cx + side * (head.rx + gap + b.rx);
+        b.cy = face.y - face.d * 0.5;
+      }
+      b.face = face;
+      return b;
     });
+    bubbles.forEach((b) => clamp(b, w, h, margin));
+    separate(bubbles, heads, w, h, margin);
+    for (const b of bubbles) {
+      const { tipX, tipY } = aimAt(b, b.face);
+      drawBubble(ctx, b, tipX, tipY, w);
+    }
     return;
   }
+  const first = phrases[(shot * 2) % phrases.length];
+  const second = phrases[(shot * 2 + 1) % phrases.length];
   const maxWidth = w * 0.34;
-  const at = (cx, cy, tipX, tipY) => () => ({ cx, cy, tipX, tipY });
-  bubble(ctx, first, at(w * 0.29, h * 0.11, w * 0.36, h * 0.25), { font, w, h, maxWidth });
-  if (second !== first) bubble(ctx, second, at(w * 0.71, h * 0.25, w * 0.62, h * 0.37), { font, w, h, maxWidth });
+  const fixed = (text, cx, cy, tipX, tipY) => {
+    const b = { ...measureBubble(ctx, text, { font, w, maxWidth }), cx, cy };
+    clamp(b, w, h, margin);
+    drawBubble(ctx, b, tipX, tipY, w);
+  };
+  fixed(first, w * 0.29, h * 0.11, w * 0.36, h * 0.25);
+  if (second !== first) fixed(second, w * 0.71, h * 0.25, w * 0.62, h * 0.37);
 }
 
 function moustache(ctx, cx, cy, width, angle = 0) {
