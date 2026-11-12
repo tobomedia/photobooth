@@ -21,8 +21,8 @@ One guest group's single run through the booth: one tap to start, four countdown
 _Avoid_: Session, round, go
 
 **Grid**:
-The single combined image of four **Photos** arranged 2×2; the thing that is displayed and printed.
-_Avoid_: Collage, strip, sheet, montage
+The single combined image of four **Photos**; the thing that is displayed and printed. Its **Layout** is either 2×2 (portrait Photos) or a **Strip** (square Photos stacked top to bottom).
+_Avoid_: Collage, sheet, montage
 
 **Event**:
 The party the booth is used at, and the set of all **Grids** captured during it. There is only ever one current Event.

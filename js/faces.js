@@ -2,7 +2,8 @@
 // sit on them. Uses Google's MediaPipe face detector (in /vendor, so it works offline),
 // loaded only when the Host turns "Props follow faces" on.
 //
-// Face positions are given as fractions of the Photo (the 3:4 centre crop of the camera,
+// Face positions are given as fractions of the Photo (the centre crop of the camera to the
+// Photo's shape, 3:4 or square,
 // mirrored like the preview), so they line up with the overlay and the saved Photos.
 
 const BASE = new URL('../vendor/mediapipe/', import.meta.url).href;
@@ -51,7 +52,7 @@ export async function loadDetector() {
 // Starts checking `video` for faces. `isMirrored()` says whether the preview is mirrored,
 // `shouldRun()` lets the app pause checks while the camera is hidden, and `onUpdate()`
 // is called after every check.
-export async function startTracking(video, { isMirrored, shouldRun, onUpdate }) {
+export async function startTracking(video, { isMirrored, photoAspect = () => 3 / 4, shouldRun, onUpdate }) {
   stopTracking();
   detector = await loadDetector();
   let warm = false;
@@ -61,7 +62,7 @@ export async function startTracking(video, { isMirrored, shouldRun, onUpdate }) 
       const started = performance.now();
       try {
         const result = detector.detectForVideo(video, started);
-        update(result.detections, video, isMirrored());
+        update(result.detections, video, isMirrored(), photoAspect());
       } catch (err) {
         console.warn('Face tracking check failed', err);
       }
@@ -93,15 +94,15 @@ export const averageCheckMs = () => checkMs;
 // The faces right now, biggest first.
 export const currentFaces = () => tracked.map(({ eyes, nose, mouth, top, size, slot }) => ({ eyes, nose, mouth, top, size, slot }));
 
-function update(detections, video, mirrored) {
+function update(detections, video, mirrored, aspect) {
   const now = performance.now();
   const vw = video.videoWidth;
   const vh = video.videoHeight;
-  // The same 3:4 centre crop as capturePhoto and the preview's object-fit: cover.
+  // The same centre crop as capturePhoto and the preview's object-fit: cover.
   let sw = vw;
   let sh = vh;
-  if (vw / vh > 3 / 4) sw = vh * 0.75;
-  else sh = vw / 0.75;
+  if (vw / vh > aspect) sw = vh * aspect;
+  else sh = vw / aspect;
   const sx = (vw - sw) / 2;
   const sy = (vh - sh) / 2;
   const point = (k) => {

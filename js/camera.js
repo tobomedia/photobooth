@@ -51,7 +51,7 @@ export function stopCamera(video) {
 
 
 // Grab the current video frame as one Photo: centre-cropped to the
-// requested shape (3:4 portrait) and optionally mirrored.
+// requested shape (3:4 portrait or square) and optionally mirrored.
 export function capturePhoto(video, { width, height, mirror }) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;

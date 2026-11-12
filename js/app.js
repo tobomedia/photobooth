@@ -1,5 +1,5 @@
 import { startCamera, capturePhoto } from './camera.js';
-import { composeGrid, previewGrid, canvasToBlob, FONTS, fontById, loadFonts } from './grid.js';
+import { composeGrid, previewGrid, canvasToBlob, FONTS, fontById, loadFonts, LAYOUTS, layoutById } from './grid.js';
 import { PATTERNS, drawBackground } from './backgrounds.js';
 import { PROP_SETS, DEFAULT_PHRASES, drawProps, propForShot, shuffleMix } from './props.js';
 import { startTracking, stopTracking, trackingActive, currentFaces, averageCheckMs } from './faces.js';
@@ -14,7 +14,6 @@ const CONFIG = {
   pauseBetweenPhotosMs: 1000,
   propRevealMs: 2000, // time to get into position when new props appear, before the countdown
   hostHoldMs: 3000,
-  photo: { width: 900, height: 1200 }, // 3:4 portrait
   grid: { gap: 30, border: 60, background: '#ffffff', jpegQuality: 0.9 },
   shareBatchSize: 30,
 };
@@ -54,6 +53,7 @@ const els = {
   patterns: $('patterns'),
   colour: $('colour'),
   stylePreview: $('style-preview'),
+  layouts: $('layouts'),
   propsOverlay: $('props-overlay'),
   propCue: $('prop-cue'),
   cycleProps: $('cycle-props'),
@@ -74,6 +74,7 @@ const els = {
 
 let state = 'idle'; // idle | turn | review
 let reviewUrl = null;
+let reviewLayout = 'grid'; // the layout of the Grid on screen, for printing
 let facing = 'user'; // the camera in use: 'user' (front) or 'environment' (back)
 
 // Waits are only used during a Turn, so Cancel can cut any of them short: they then
@@ -97,6 +98,7 @@ const sleep = (ms) =>
 function setState(next) {
   state = next;
   document.body.dataset.state = next;
+  if (next === 'idle') applyLayout(); // a layout change made during a Turn waits until it ends
 }
 
 // ---------- Messages ----------
@@ -193,10 +195,12 @@ async function onStart() {
 
   try {
     await loadFonts(); // speech bubbles use the Grid font
+    const style = gridStyle(); // fixed for the whole Turn, even if the Host changes it mid-way
+    const { photo: photoSize } = layoutById(style.layout);
     for (let i = 0; i < CONFIG.photosPerTurn; i++) {
       await revealProps(i);
       await countdown(CONFIG.countdownSeconds);
-      const photo = capturePhoto(els.preview, { ...CONFIG.photo, mirror: mirrored() });
+      const photo = capturePhoto(els.preview, { ...photoSize, mirror: mirrored() });
       drawProps(photo.getContext('2d'), photo.width, photo.height, propsForTurn(), i);
       photos.push(photo);
       flash();
@@ -208,7 +212,8 @@ async function onStart() {
     els.cancel.hidden = true;
 
     await loadFonts();
-    const canvas = composeGrid(photos, gridStyle());
+    const canvas = composeGrid(photos, style);
+    reviewLayout = style.layout;
     const blob = await canvasToBlob(canvas, CONFIG.grid.jpegQuality);
     photos.forEach((p) => (p.width = 0)); // free canvas memory on small devices
     canvas.width = 0;
@@ -317,20 +322,38 @@ function gridStyle() {
   } catch {
     /* use the defaults */
   }
-  return { caption: '', showDate: false, font: 'system', pattern: 'plain', ...CONFIG.grid, ...saved };
+  return { caption: '', showDate: false, font: 'system', pattern: 'plain', layout: 'grid', ...CONFIG.grid, ...saved };
 }
 
 function saveGridStyle(changes) {
-  const { caption, showDate, background, font, pattern } = { ...gridStyle(), ...changes };
+  const { caption, showDate, background, font, pattern, layout } = { ...gridStyle(), ...changes };
   try {
-    localStorage.setItem(STYLE_KEY, JSON.stringify({ caption, showDate, background, font, pattern }));
+    localStorage.setItem(STYLE_KEY, JSON.stringify({ caption, showDate, background, font, pattern, layout }));
   } catch {
     showMessage('Could not save the Grid style on this device.', { timeoutMs: 4000 });
   }
   renderStyle();
 }
 
+// The camera view takes the shape of the Photos (3:4 or square), so guests frame what's saved.
+function applyLayout() {
+  if (state !== 'idle') return;
+  document.body.dataset.layout = layoutById(gridStyle().layout).id;
+  drawOverlay(0);
+}
+
 function setupStyle() {
+  els.layouts.replaceChildren(
+    ...LAYOUTS.map((l) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'layout-choice';
+      b.dataset.layout = l.id;
+      b.textContent = l.name;
+      b.addEventListener('click', () => saveGridStyle({ layout: l.id }));
+      return b;
+    }),
+  );
   els.swatches.replaceChildren(
     ...SWATCHES.map((colour) => {
       const b = document.createElement('button');
@@ -382,6 +405,8 @@ function renderStyle() {
   const style = gridStyle();
   if (document.activeElement !== els.caption) els.caption.value = style.caption;
   els.dateToggle.checked = style.showDate;
+  els.layouts.querySelectorAll('.layout-choice').forEach((b) => b.classList.toggle('selected', b.dataset.layout === style.layout));
+  applyLayout();
   els.colour.value = style.background;
   els.swatches.querySelectorAll('.swatch').forEach((b) => b.classList.toggle('selected', b.dataset.colour === style.background));
   els.patterns.querySelectorAll('.pattern-choice').forEach((b) => {
@@ -433,7 +458,7 @@ function propsForTurn() {
   };
 }
 
-// The overlay canvas covers the camera preview exactly (both are 3:4), so props drawn
+// The overlay canvas covers the camera preview exactly (both are the Photo's shape), so props drawn
 // at the same fractions land in the same place as in the saved Photo.
 let overlayShot = 0; // which Photo of the Turn the overlay is showing props for
 
@@ -537,6 +562,7 @@ async function updateTracking() {
   try {
     await startTracking(els.preview, {
       isMirrored: mirrored,
+      photoAspect: () => { const p = layoutById(gridStyle().layout).photo; return p.width / p.height; },
       // Pause while the camera is covered: the Grid on screen, the Host panel, the gallery.
       shouldRun: () => state !== 'review' && els.host.hidden && !galleryOpen(),
       onUpdate: () => state !== 'review' && drawOverlay(overlayShot),
@@ -621,6 +647,7 @@ async function onPrint() {
     cell.appendChild(img);
     return { cell, img };
   });
+  els.printSheet.classList.toggle('strip', reviewLayout === 'strip');
   els.printSheet.replaceChildren(...imgs.map((x) => x.cell));
   await Promise.all(imgs.map(({ img }) => img.decode().catch(() => {})));
   window.print();
@@ -813,6 +840,7 @@ document.addEventListener('visibilitychange', keepAwake);
 setupHost();
 setupStyle();
 setupProps();
+applyLayout();
 loadFonts().then(() => !els.host.hidden && renderStyle());
 registerServiceWorker();
 keepAwake();

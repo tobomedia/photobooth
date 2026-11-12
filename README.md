@@ -1,6 +1,6 @@
 # Photobooth
 
-A browser photo booth for a party. Guests tap **Start**, get four countdowns, and the four Photos become one 2×2 **Grid** that's shown on screen and saved on the device. After the party, the Host exports every Grid to Google Photos (or a zip). Vocabulary lives in [CONTEXT.md](CONTEXT.md).
+A browser photo booth for a party. Guests tap **Start**, get four countdowns, and the four Photos become one **Grid** (2×2, or a Strip) that's shown on screen and saved on the device. After the party, the Host exports every Grid to Google Photos (or a zip). Vocabulary lives in [CONTEXT.md](CONTEXT.md).
 
 No build step, no dependencies: plain HTML/CSS/JS.
 
@@ -34,12 +34,12 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 
 - **Share Grids 1–30, 31–60, …** — opens the share sheet; pick Google Photos (or "Save Images"). Done in batches because some phones limit how many files one share can carry. A ✓ marks batches already shared.
 - **Download all as zip** — fallback if sharing doesn't work.
-- **Grid style** — text printed under the Photos (e.g. names and occasion), its font, an optional date, the background colour, and a background pattern (plain, gradient, dots, stripes, hearts or confetti). Text is black or white automatically to suit the colour. A small preview shows the result. Changes apply to the next Turn.
+- **Grid style** — **Layout**: *2×2 Grid* (default) or *Strip* (four square Photos stacked top to bottom, like a classic booth strip; the camera view turns square so guests can frame it). Then the text printed under the Photos (e.g. names and occasion), its font, an optional date, the background colour, and a background pattern (plain, gradient, dots, stripes, hearts or confetti). Text is black or white automatically to suit the colour. A small preview shows the result. Changes apply to the next Turn.
 - **Props** — speech bubbles, glasses & moustache, crown, hats (a different one for each person), bunny ears, angels & devils, flower crown, heart eyes, party decorations, hearts, or *Mix* (the default: four different sets, one per Photo, in a new random order every Turn). They show over the live camera so guests can line up with them, and are saved in the Photos. When the props change, they pop up with a cue ("Crown time!") and guests get a couple of seconds to get into position before the countdown. Edit the speech bubble phrases (one per line). Switch on *Let guests choose props* to show a row of prop buttons on the start screen; it goes back to the Host's choice after each Turn.
 - **Props follow faces** (off by default) — face tracking puts glasses, crowns, hats, ears, halos, flowers and speech bubbles on each person (up to 6) and moves them as people move. If no face is found, props fall back to their fixed places. The Host panel shows how long each face check takes on this device: if it says *slow*, or the camera gets jerky, turn it off. It uses Google's MediaPipe face detector (in `vendor/mediapipe`, about 14 MB, cached for offline use).
 - **Camera** — **Front** (default) or **Back**. Remembered on the device. If the back camera won't start, the booth goes back to the front one and says why. Front is mirrored; back isn't.
 - **Backup** — when on (default on Android/desktop, off on iPhone), each Grid is also downloaded to the device's Downloads folder as it's taken, so a copy survives even if the browser's storage is cleared. On Android it shows up in Google Photos / Gallery.
-- **Printing** — when on, a **Print** button appears after each Turn and prints 4 copies of the Grid on one A4 portrait sheet with cut lines. Someone has to tap through the phone's print dialog.
+- **Printing** — when on, a **Print** button appears after each Turn and prints 4 copies of the Grid on one A4 portrait sheet with cut lines (Strips: 4 side by side, about 5 cm wide). Someone has to tap through the phone's print dialog.
 - **Clear & start new Event** — deletes every Grid on the device. Needs a second tap, and warns if anything hasn't been exported.
 
 Timings, Photo size, Grid borders and the default colour are in `CONFIG` at the top of `js/app.js`.
