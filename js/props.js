@@ -1,4 +1,4 @@
-// Props: speech bubbles, glasses, crowns and so on, in fixed places over the camera.
+// Props: speech bubbles, glasses, crowns, hats and so on, in fixed places over the camera.
 // Guests line themselves up with them. The same drawing is used for the live preview
 // and for the saved Photos, so what guests see is what they get.
 //
@@ -18,12 +18,17 @@ export const PROP_SETS = [
   { id: 'bubbles', name: 'Speech bubbles', icon: '💬', cue: 'Say something!', draw: drawBubbles },
   { id: 'disguise', name: 'Glasses', icon: '🤓', cue: 'Glasses on!', draw: drawDisguise },
   { id: 'crown', name: 'Crown', icon: '👑', cue: 'Crown time!', draw: drawCrown },
+  { id: 'hats', name: 'Hats', icon: '🎩', cue: 'Hats on!', draw: drawHats },
+  { id: 'ears', name: 'Bunny ears', icon: '🐰', cue: 'Bunny ears!', draw: drawEars },
+  { id: 'angels', name: 'Angels & devils', icon: '😇', cue: 'Angel or devil?', draw: drawAngels },
+  { id: 'flowers', name: 'Flower crown', icon: '🌸', cue: 'Flower power!', draw: drawFlowers },
+  { id: 'hearteyes', name: 'Heart eyes', icon: '😍', cue: 'Heart eyes!', draw: drawHeartEyes },
   { id: 'party', name: 'Party', icon: '🎉', cue: 'Party pose!', draw: drawParty },
-  { id: 'love', name: 'Hearts', icon: '😍', cue: 'Show the love!', draw: drawLove },
+  { id: 'love', name: 'Hearts', icon: '💕', cue: 'Show the love!', draw: drawLove },
   { id: 'mix', name: 'Mix', icon: '🔀' },
 ];
 
-const MIX_POOL = ['bubbles', 'disguise', 'crown', 'party', 'love'];
+const MIX_POOL = ['bubbles', 'disguise', 'crown', 'hats', 'ears', 'angels', 'flowers', 'hearteyes', 'party', 'love'];
 
 // A random order of different sets for one Turn's four Photos, so every group gets a surprise.
 export function shuffleMix() {
@@ -373,4 +378,178 @@ function drawLove(ctx, w, h) {
     ['💗', 0.92, 0.45, 0.09, 0.2], ['💘', 0.12, 0.88, 0.12, -0.2], ['❤️', 0.88, 0.9, 0.11, 0.3],
   ];
   hearts.forEach(([c, x, y, s, a]) => emoji(ctx, c, w * x, h * y, w * s, a));
+}
+
+// ---------- Head props: hats, ears, halos, flowers, heart eyes ----------
+// Drawn on each tracked face, or without face tracking on one face-sized spot in the
+// middle of the picture for guests to line up with.
+
+const STAND_IN = { eyes: [{ x: 0.42, y: 0.42 }, { x: 0.58, y: 0.42 }], nose: { x: 0.5, y: 0.5 }, mouth: { x: 0.5, y: 0.57 }, slot: 0 };
+
+function eachFace(ctx, w, h, faces, draw) {
+  for (const face of faces ?? [geometry(STAND_IN, w, h)]) {
+    // Draw in the face's own frame: origin between the eyes, tilted with the head,
+    // so "up" is -y and sizes are in eye distances (d).
+    ctx.save();
+    ctx.translate(face.x, face.y);
+    ctx.rotate(face.angle);
+    draw(face, face.d);
+    ctx.restore();
+  }
+}
+
+const HEAD_TOP = -1.35; // in eye distances above the eyes: where a hat sits on the hair
+
+// [emoji, size, how far the glyph's centre sits above its brim, as a share of size]
+const HATS = [['🎩', 2.1, 0.36], ['partyhat'], ['👒', 2.6, 0.22], ['🧢', 2.1, 0.25], ['🎓', 2.2, 0.3]];
+
+function drawHats(ctx, w, h, { faces, shot }) {
+  eachFace(ctx, w, h, faces, (face, d) => {
+    const [hat, size, lift] = HATS[(face.slot + shot) % HATS.length];
+    if (hat === 'partyhat') partyHat(ctx, d, face.slot + shot);
+    else emoji(ctx, hat, 0, (HEAD_TOP - size * lift) * d, size * d);
+  });
+}
+
+const HAT_COLOURS = [['#ff4f6d', '#ffd23f'], ['#3a86ff', '#ffffff'], ['#2a9d8f', '#ffd23f'], ['#9b5de5', '#ff9f1c']];
+
+function partyHat(ctx, d, n) {
+  const [main, stripe] = HAT_COLOURS[n % HAT_COLOURS.length];
+  const base = (HEAD_TOP + 0.15) * d;
+  const half = 0.7 * d;
+  const tip = base - 1.9 * d;
+  const cone = () => {
+    ctx.beginPath();
+    ctx.moveTo(-half, base);
+    ctx.lineTo(0, tip);
+    ctx.lineTo(half, base);
+    ctx.quadraticCurveTo(0, base + 0.25 * d, -half, base);
+    ctx.closePath();
+  };
+  ctx.save();
+  ctx.rotate(0.12);
+  cone();
+  ctx.fillStyle = main;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = stripe;
+  ctx.lineWidth = 0.16 * d;
+  for (let i = -3; i <= 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(-half * 2, base - 0.4 * d * i - 0.6 * d);
+    ctx.lineTo(half * 2, base - 0.4 * d * i);
+    ctx.stroke();
+  }
+  ctx.restore();
+  cone();
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.lineWidth = 0.04 * d;
+  ctx.stroke();
+  ctx.fillStyle = stripe === '#ffffff' ? '#ffd23f' : '#ffffff';
+  ctx.beginPath();
+  ctx.arc(0, tip, 0.22 * d, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawEars(ctx, w, h, { faces }) {
+  eachFace(ctx, w, h, faces, (face, d) => {
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(side * 0.5 * d, (HEAD_TOP + 0.1) * d);
+      ctx.rotate(side * 0.18);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#9a8f99';
+      ctx.lineWidth = 0.05 * d;
+      ctx.beginPath();
+      ctx.ellipse(0, -0.95 * d, 0.32 * d, 1.0 * d, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffb3c7';
+      ctx.beginPath();
+      ctx.ellipse(0, -0.9 * d, 0.16 * d, 0.75 * d, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // A pink nose and whiskers on the nose tip.
+    const nx = (face.nose.x - face.x) * Math.cos(face.angle) + (face.nose.y - face.y) * Math.sin(face.angle);
+    const ny = -(face.nose.x - face.x) * Math.sin(face.angle) + (face.nose.y - face.y) * Math.cos(face.angle);
+    ctx.fillStyle = '#ff7aa2';
+    ctx.beginPath();
+    ctx.ellipse(nx, ny, 0.16 * d, 0.11 * d, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40, 30, 30, 0.8)';
+    ctx.lineWidth = 0.035 * d;
+    ctx.lineCap = 'round';
+    for (const side of [-1, 1]) {
+      for (const tilt of [-0.15, 0, 0.15]) {
+        ctx.beginPath();
+        ctx.moveTo(nx + side * 0.25 * d, ny + 0.1 * d + tilt * d * 0.5);
+        ctx.lineTo(nx + side * 0.95 * d, ny + 0.1 * d + tilt * d * 1.6);
+        ctx.stroke();
+      }
+    }
+  });
+}
+
+function drawAngels(ctx, w, h, { faces, shot }) {
+  eachFace(ctx, w, h, faces, (face, d) => {
+    if ((face.slot + shot) % 2 === 0) {
+      // A glowing gold halo floating above the head.
+      ctx.save();
+      ctx.shadowColor = 'rgba(255, 230, 120, 0.95)';
+      ctx.shadowBlur = 0.4 * d;
+      ctx.strokeStyle = '#ffd23f';
+      ctx.lineWidth = 0.17 * d;
+      ctx.beginPath();
+      ctx.ellipse(0, (HEAD_TOP - 0.45) * d, 0.85 * d, 0.24 * d, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#fff3b0';
+      ctx.lineWidth = 0.05 * d;
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // Little red devil horns.
+      for (const side of [-1, 1]) {
+        const x = side * 0.55 * d;
+        const y = (HEAD_TOP + 0.25) * d;
+        ctx.beginPath();
+        ctx.moveTo(x - 0.22 * d, y);
+        ctx.quadraticCurveTo(x - 0.2 * d, y - 0.55 * d, x + side * 0.25 * d, y - 0.85 * d);
+        ctx.quadraticCurveTo(x + side * 0.05 * d, y - 0.4 * d, x + 0.22 * d, y);
+        ctx.closePath();
+        ctx.fillStyle = '#d62828';
+        ctx.fill();
+        ctx.strokeStyle = '#7a0d0d';
+        ctx.lineWidth = 0.05 * d;
+        ctx.stroke();
+      }
+    }
+  });
+}
+
+const FLOWERS = ['🌸', '🌼', '🌺', '🌷'];
+
+function drawFlowers(ctx, w, h, { faces }) {
+  eachFace(ctx, w, h, faces, (face, d) => {
+    // A ring of flowers along the top of the head, biggest in the middle.
+    const count = 7;
+    for (let i = 0; i < count; i++) {
+      const t = (i / (count - 1) - 0.5) * 2; // -1 … 1
+      const a = t * 1.05;
+      const x = Math.sin(a) * 1.15 * d;
+      const y = (HEAD_TOP + 0.9) * d - Math.cos(a) * 1.0 * d;
+      emoji(ctx, FLOWERS[i % FLOWERS.length], x, y, (0.62 - Math.abs(t) * 0.12) * d, t * 0.5);
+    }
+  });
+}
+
+function drawHeartEyes(ctx, w, h, { faces }) {
+  eachFace(ctx, w, h, faces, (face, d) => {
+    emoji(ctx, '❤️', -0.5 * d, 0.02 * d, 0.85 * d);
+    emoji(ctx, '❤️', 0.5 * d, 0.02 * d, 0.85 * d);
+    emoji(ctx, '💕', 1.1 * d, (HEAD_TOP + 0.1) * d, 0.6 * d, 0.3);
+  });
 }
