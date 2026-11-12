@@ -9,16 +9,44 @@ export async function startCamera(video, deviceId = null) {
     throw new Error('this browser has no camera access (the page must be opened over https)');
   }
   stopCamera(video);
-  const size = { width: { ideal: 1920 }, height: { ideal: 1440 } };
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: deviceId ? { deviceId: { exact: deviceId }, ...size } : { facingMode: 'user', ...size },
-  });
+  const stream = await openStream(deviceId);
   currentStream = stream;
   video.srcObject = stream;
   await video.play();
   const settings = stream.getVideoTracks()[0]?.getSettings() ?? {};
   return { deviceId: settings.deviceId ?? null, facingMode: settings.facingMode ?? null };
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SIZE = { width: { ideal: 1920 }, height: { ideal: 1440 } };
+
+// Android often refuses to open a second camera for a moment after the first one is
+// stopped ("Could not start video source"), and some cameras reject the size request.
+// So try a few ways, with short pauses, before giving up.
+async function openStream(deviceId) {
+  if (!deviceId) return navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', ...SIZE } });
+
+  const label = (await listCameras().catch(() => [])).find((c) => c.deviceId === deviceId)?.label ?? '';
+  const attempts = [
+    { wait: 0, video: { deviceId: { exact: deviceId }, ...SIZE } },
+    { wait: 400, video: { deviceId: { exact: deviceId }, ...SIZE } },
+    { wait: 800, video: { deviceId: { exact: deviceId } } },
+  ];
+  // Android names cameras like "camera2 0, facing back": asking by direction sometimes works when the id doesn't.
+  if (/back|rear|environment/i.test(label)) attempts.push({ wait: 400, video: { facingMode: { exact: 'environment' }, ...SIZE } });
+
+  let lastErr;
+  for (const { wait, video } of attempts) {
+    if (wait) await sleep(wait);
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: false, video });
+    } catch (err) {
+      console.warn('Camera attempt failed', video, err);
+      lastErr = err;
+      if (err.name === 'NotAllowedError') break; // permission refused: retrying won't help
+    }
+  }
+  throw lastErr;
 }
 
 export function stopCamera(video) {

@@ -94,20 +94,24 @@ function chosenCameraId() {
   }
 }
 
-async function initCamera() {
+// `switching` is true when the Host has just picked a camera, so a failure is shown, not hidden.
+async function initCamera({ switching = false } = {}) {
   els.start.disabled = true;
   try {
     const chosen = chosenCameraId();
+    let fallbackNote = null;
     try {
       camera = await startCamera(els.preview, chosen);
     } catch (err) {
-      if (!chosen || !['OverconstrainedError', 'NotFoundError', 'NotReadableError'].includes(err.name)) throw err;
-      // The chosen camera has gone (unplugged, or the browser reset its ids): use the default one.
+      if (!chosen || err.name === 'NotAllowedError') throw err;
+      // The chosen camera wouldn't start (unplugged, busy, or the browser reset its ids): use the default one.
       console.warn('Chosen camera unavailable, using the default', err);
+      fallbackNote = `Couldn't start that camera (${err.name}: ${err.message}), so the front camera is being used.`;
       camera = await startCamera(els.preview);
     }
     els.preview.classList.toggle('unmirrored', !mirrored());
-    hideMessage();
+    if (fallbackNote) showMessage(fallbackNote, { timeoutMs: switching ? 0 : 8000 });
+    else hideMessage();
     els.start.disabled = false;
   } catch (err) {
     console.error(err);
@@ -374,7 +378,8 @@ function setupHost() {
     } catch {
       showMessage('Could not save the camera setting on this device.', { timeoutMs: 4000 });
     }
-    await initCamera();
+    els.cameraSelect.disabled = true;
+    await initCamera({ switching: true });
     await renderCameras();
   });
   els.zip.addEventListener('click', onZip);
