@@ -20,7 +20,7 @@ const CONFIG = {
 };
 
 const PRINT_KEY = 'photobooth.printEnabled';
-const PAPER_KEY = 'photobooth.printPaper'; // 'photo' (4×6″) or 'a4'
+const PAPER_KEY = 'photobooth.printPaper'; // 'photo' (100×148 mm postcard, Selphy KP-108IN) or 'a4'
 const BACKUP_KEY = 'photobooth.backupEnabled';
 const CAMERA_KEY = 'photobooth.cameraFacing'; // 'user' (front, default) or 'environment' (back)
 const STYLE_KEY = 'photobooth.gridStyle';
@@ -764,7 +764,7 @@ function setPageSize(paper) {
     style.id = 'page-size';
     document.head.appendChild(style);
   }
-  style.textContent = `@page { size: ${paper === 'photo' ? '4in 6in' : 'A4 portrait'}; margin: 0; }`;
+  style.textContent = `@page { size: ${paper === 'photo' ? '100mm 148mm' : 'A4 portrait'}; margin: 0; }`;
 }
 
 async function onPrint() {

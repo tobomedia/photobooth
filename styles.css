@@ -463,10 +463,10 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   #print-sheet.strip { grid-template-columns: repeat(4, 52.5mm); grid-template-rows: 297mm; }
   #print-sheet.strip .cell { border-bottom: none; border-right: 0.3mm dashed #bbb; padding: 5mm 4mm; }
   #print-sheet.strip .cell:last-child { border-right-color: transparent; } /* keeps all 4 the same size */
-  /* 4×6″ photo paper: one Grid, or two Strips with a cut line between them */
-  #print-sheet.photo { grid-template-columns: 4in; grid-template-rows: 6in; width: 4in; height: 6in; }
+  /* Postcard / 4×6″ photo paper (100×148 mm): one Grid, or two Strips with a cut line between them */
+  #print-sheet.photo { grid-template-columns: 100mm; grid-template-rows: 148mm; width: 100mm; height: 148mm; }
   #print-sheet.photo .cell { border: none; padding: 3mm; }
-  #print-sheet.photo.strip { grid-template-columns: 2in 2in; grid-template-rows: 6in; }
+  #print-sheet.photo.strip { grid-template-columns: 50mm 50mm; grid-template-rows: 148mm; }
   #print-sheet.photo.strip .cell { border-right: 0.3mm dashed #bbb; padding: 3mm 2mm; }
   #print-sheet.photo.strip .cell:last-child { border-right-color: transparent; }
 }
