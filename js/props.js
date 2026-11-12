@@ -3,7 +3,9 @@
 // and for the saved Photos, so what guests see is what they get.
 //
 // Positions and sizes are fractions of the Photo's width/height, so props land in
-// the same place at any size. Everything is drawn in code or with emoji: no image
+// the same place at any size. When face tracking is on, `faces` (from faces.js) puts
+// glasses, crowns and speech bubbles on the people instead; with no faces found they
+// fall back to the fixed places. Everything is drawn in code or with emoji: no image
 // files, so it works offline.
 
 export const DEFAULT_PHRASES = ['Party time!', 'Cheers!', 'Say cheese!', 'Best night ever!'];
@@ -40,17 +42,38 @@ export function propForShot({ set = 'none', mixOrder = MIX_POOL }, shot) {
 }
 
 // Draws the props for one Photo onto ctx, covering a width×height area.
-// `phrases` are the speech bubble lines; `font` is a CSS font family for them.
+// `phrases` are the speech bubble lines; `font` is a CSS font family for them;
+// `faces` are tracked faces, or null to use the fixed places.
 export function drawProps(ctx, width, height, settings, shot = 0) {
   const { phrases = DEFAULT_PHRASES, font = 'sans-serif' } = settings;
+  const faces = settings.faces?.length ? settings.faces.map((f) => geometry(f, width, height)) : null;
   const prop = propForShot(settings, shot);
   if (!prop?.draw) return;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0); // the Photo may have been drawn mirrored; props never are
   const list = phrases.map((p) => p.trim()).filter(Boolean);
-  prop.draw(ctx, width, height, { phrases: list.length ? list : DEFAULT_PHRASES, font, shot });
+  prop.draw(ctx, width, height, { phrases: list.length ? list : DEFAULT_PHRASES, font, shot, faces });
   ctx.restore();
 }
+
+// A face in pixels: the point between the eyes, the eye distance `d` (the face's scale),
+// its tilt, and `up`, a unit vector from chin to crown.
+function geometry(f, w, h) {
+  const [a, b] = f.eyes.map((p) => ({ x: p.x * w, y: p.y * h }));
+  const angle = Math.atan2(b.y - a.y, b.x - a.x);
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+    d: Math.max(Math.hypot(b.x - a.x, b.y - a.y), w * 0.03),
+    angle,
+    up: { x: Math.sin(angle), y: -Math.cos(angle) },
+    nose: { x: f.nose.x * w, y: f.nose.y * h },
+    mouth: { x: f.mouth.x * w, y: f.mouth.y * h },
+  };
+}
+
+// The point `dist` above the eyes, along the face's own up direction.
+const above = (face, dist) => ({ x: face.x + face.up.x * dist, y: face.y + face.up.y * dist });
 
 function emoji(ctx, char, x, y, size, angle = 0) {
   ctx.save();
@@ -79,8 +102,9 @@ function wrap(ctx, text, maxWidth) {
 }
 
 // A comic-style speech bubble: a white oval with a curved tail pointing at (tipX, tipY),
-// a bold outline and a solid drop shadow.
-function bubble(ctx, text, cx, cy, { font, w, maxWidth, tipX, tipY }) {
+// a bold outline and a solid drop shadow. `place(rx, ry)` gives the centre and tail tip
+// once the bubble's size is known; the bubble is kept inside the Photo.
+function bubble(ctx, text, place, { font, w, h, maxWidth }) {
   let size = w * 0.06;
   const setFont = () => (ctx.font = `700 ${size}px ${font}`);
   setFont();
@@ -95,6 +119,10 @@ function bubble(ctx, text, cx, cy, { font, w, maxWidth, tipX, tipY }) {
   const textHeight = lines.length * lineHeight;
   const rx = (widest / 2) * 1.22 + size * 0.7;
   const ry = (textHeight / 2) * 1.45 + size * 0.6;
+  const margin = w * 0.02;
+  let { cx, cy, tipX, tipY } = place(rx, ry);
+  cx = Math.min(Math.max(cx, rx + margin), w - rx - margin);
+  cy = Math.min(Math.max(cy, ry + margin), h - ry - margin);
 
   // Tail: leaves the oval on the side facing the tip, curving slightly.
   const angle = Math.atan2((tipY - cy) / ry, (tipX - cx) / rx);
@@ -146,18 +174,39 @@ function bubble(ctx, text, cx, cy, { font, w, maxWidth, tipX, tipY }) {
   lines.forEach((l, i) => ctx.fillText(l, cx, cy - textHeight / 2 + lineHeight * (i + 0.5) + size * 0.04));
 }
 
-function drawBubbles(ctx, w, h, { phrases, font, shot }) {
+function drawBubbles(ctx, w, h, { phrases, font, shot, faces }) {
   const first = phrases[(shot * 2) % phrases.length];
   const second = phrases[(shot * 2 + 1) % phrases.length];
+  if (faces) {
+    // A bubble for each of the biggest three faces, above the head and to the outside.
+    const people = faces.slice(0, 3);
+    const maxWidth = w * (people.length > 1 ? 0.3 : 0.38);
+    people.forEach((face, i) => {
+      const text = phrases[(shot * 2 + i) % phrases.length];
+      const side = face.x < w / 2 ? -1 : 1;
+      const head = above(face, face.d * 1.7);
+      bubble(ctx, text, (rx, ry) => {
+        const gap = face.d * 0.5;
+        if (head.y - gap - ry * 2 > w * 0.02) {
+          return { cx: head.x + side * face.d * 0.7, cy: head.y - gap - ry, tipX: head.x + side * face.d * 0.2, tipY: head.y - face.d * 0.1 };
+        }
+        // No room above: beside the head instead.
+        return { cx: face.x + side * (face.d * 1.4 + rx), cy: face.y - face.d * 0.6, tipX: face.x + side * face.d * 1.1, tipY: face.y - face.d * 0.2 };
+      }, { font, w, h, maxWidth });
+    });
+    return;
+  }
   const maxWidth = w * 0.34;
-  bubble(ctx, first, w * 0.29, h * 0.11, { font, w, maxWidth, tipX: w * 0.36, tipY: h * 0.25 });
-  if (second !== first) bubble(ctx, second, w * 0.71, h * 0.25, { font, w, maxWidth, tipX: w * 0.62, tipY: h * 0.37 });
+  const at = (cx, cy, tipX, tipY) => () => ({ cx, cy, tipX, tipY });
+  bubble(ctx, first, at(w * 0.29, h * 0.11, w * 0.36, h * 0.25), { font, w, h, maxWidth });
+  if (second !== first) bubble(ctx, second, at(w * 0.71, h * 0.25, w * 0.62, h * 0.37), { font, w, h, maxWidth });
 }
 
-function moustache(ctx, cx, cy, width) {
+function moustache(ctx, cx, cy, width, angle = 0) {
   const s = width / 2;
   ctx.save();
   ctx.translate(cx, cy);
+  ctx.rotate(angle);
   ctx.scale(1, -1); // drawn as an arch; flipped so the tips curl upwards
   ctx.fillStyle = '#2b1a10';
   ctx.beginPath();
@@ -172,12 +221,32 @@ function moustache(ctx, cx, cy, width) {
   ctx.restore();
 }
 
-function drawDisguise(ctx, w, h) {
+function drawDisguise(ctx, w, h, { faces }) {
+  if (faces) {
+    for (const face of faces) {
+      emoji(ctx, '🕶️', face.x, face.y + face.d * 0.05, face.d * 2.3, face.angle);
+      // Between the nose and the mouth, a little nearer the mouth.
+      const x = face.nose.x * 0.45 + face.mouth.x * 0.55;
+      const y = face.nose.y * 0.45 + face.mouth.y * 0.55;
+      moustache(ctx, x, y, face.d * 1.25, face.angle);
+    }
+    return;
+  }
   emoji(ctx, '🕶️', w * 0.5, h * 0.4, w * 0.4);
   moustache(ctx, w * 0.5, h * 0.55, w * 0.26);
 }
 
-function drawCrown(ctx, w, h) {
+function drawCrown(ctx, w, h, { faces }) {
+  if (faces) {
+    for (const face of faces) {
+      const size = face.d * 2.2;
+      const crown = above(face, face.d * 1.5 + size * 0.4); // sits on top of the head
+      emoji(ctx, '👑', crown.x, Math.max(crown.y, size * 0.4), size, face.angle); // never off the top
+    }
+    emoji(ctx, '✨', w * 0.12, h * 0.08, w * 0.09);
+    emoji(ctx, '✨', w * 0.88, h * 0.12, w * 0.07);
+    return;
+  }
   emoji(ctx, '👑', w * 0.5, h * 0.13, w * 0.32, -0.08);
   emoji(ctx, '✨', w * 0.22, h * 0.09, w * 0.1);
   emoji(ctx, '✨', w * 0.8, h * 0.17, w * 0.08);

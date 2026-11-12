@@ -2,6 +2,7 @@ import { startCamera, capturePhoto } from './camera.js';
 import { composeGrid, previewGrid, canvasToBlob, FONTS, fontById, loadFonts } from './grid.js';
 import { PATTERNS, drawBackground } from './backgrounds.js';
 import { PROP_SETS, DEFAULT_PHRASES, drawProps, propForShot, shuffleMix } from './props.js';
+import { startTracking, stopTracking, trackingActive, currentFaces, averageCheckMs } from './faces.js';
 import { setupGallery, openGallery, closeGallery, galleryOpen } from './gallery.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
@@ -58,6 +59,8 @@ const els = {
   propSets: $('prop-sets'),
   phrases: $('phrases'),
   guestPropsToggle: $('guest-props-toggle'),
+  followFacesToggle: $('follow-faces-toggle'),
+  followFacesStatus: $('follow-faces-status'),
   clear: $('clear'),
   message: $('message'),
   messageText: $('message-text'),
@@ -143,6 +146,7 @@ async function initCamera({ switching = false } = {}) {
     els.preview.classList.toggle('unmirrored', !mirrored());
     els.start.disabled = !els.preview.srcObject;
     renderCameraChoice();
+    updateTracking();
   }
 }
 
@@ -363,7 +367,7 @@ function propSettings() {
   } catch {
     /* use the defaults */
   }
-  return { set: 'mix', phrases: DEFAULT_PHRASES, guestChoice: false, ...saved };
+  return { set: 'mix', phrases: DEFAULT_PHRASES, guestChoice: false, followFaces: false, ...saved };
 }
 
 function savePropSettings(changes) {
@@ -378,12 +382,21 @@ function savePropSettings(changes) {
 // What this Turn uses: the guest's pick if they made one, else the Host's choice.
 function propsForTurn() {
   const s = propSettings();
-  return { set: guestPick ?? s.set, mixOrder, phrases: s.phrases, font: fontById(gridStyle().font).family };
+  return {
+    set: guestPick ?? s.set,
+    mixOrder,
+    phrases: s.phrases,
+    font: fontById(gridStyle().font).family,
+    faces: trackingActive() ? currentFaces() : null,
+  };
 }
 
 // The overlay canvas covers the camera preview exactly (both are 3:4), so props drawn
 // at the same fractions land in the same place as in the saved Photo.
+let overlayShot = 0; // which Photo of the Turn the overlay is showing props for
+
 function drawOverlay(shot = 0) {
+  overlayShot = shot;
   const canvas = els.propsOverlay;
   const dpr = window.devicePixelRatio || 1;
   const w = Math.round(canvas.clientWidth * dpr);
@@ -439,6 +452,51 @@ function propButtons(container, onPick) {
   );
 }
 
+// ---------- Face tracking ----------
+
+// Runs while "Props follow faces" is on and the camera is showing; off by default, as
+// it's heavy work for older devices.
+let trackingWanted = false;
+
+async function updateTracking() {
+  const want = propSettings().followFaces && !!els.preview.srcObject;
+  if (want === trackingWanted) return;
+  trackingWanted = want;
+  if (!want) {
+    stopTracking();
+    renderTrackingStatus();
+    if (state === 'idle') drawOverlay(0);
+    return;
+  }
+  renderTrackingStatus();
+  try {
+    await startTracking(els.preview, {
+      isMirrored: mirrored,
+      // Pause while the camera is covered: the Grid on screen, the Host panel, the gallery.
+      shouldRun: () => state !== 'review' && els.host.hidden && !galleryOpen(),
+      onUpdate: () => state !== 'review' && drawOverlay(overlayShot),
+    });
+    if (!trackingWanted) stopTracking(); // switched off while it was loading
+  } catch (err) {
+    console.error(err);
+    trackingWanted = false;
+    showMessage(`Face tracking couldn't start on this device (${err.message}), so props stay in fixed places.`, { timeoutMs: 8000 });
+  }
+  renderTrackingStatus();
+}
+
+function renderTrackingStatus() {
+  const ms = averageCheckMs();
+  let text = '';
+  if (!propSettings().followFaces) text = '';
+  else if (trackingWanted && !trackingActive()) text = 'Loading face tracking…';
+  else if (!trackingActive()) text = 'Not running. Check the camera is on.';
+  else if (ms == null) text = 'Running.';
+  else text = `Running: each face check takes about ${Math.round(ms)} ms (${ms < 30 ? 'smooth' : ms < 60 ? 'OK' : 'slow on this device, consider turning it off'}).`;
+  els.followFacesStatus.textContent = text;
+  els.followFacesStatus.hidden = !text;
+}
+
 function setupProps() {
   propButtons(els.propSets, (id) => savePropSettings({ set: id }));
   propButtons(els.guestProps, (id) => {
@@ -450,6 +508,10 @@ function setupProps() {
     savePropSettings({ phrases: els.phrases.value.split('\n') });
   });
   els.guestPropsToggle.addEventListener('change', () => savePropSettings({ guestChoice: els.guestPropsToggle.checked }));
+  els.followFacesToggle.addEventListener('change', () => {
+    savePropSettings({ followFaces: els.followFacesToggle.checked });
+    updateTracking();
+  });
   new ResizeObserver(() => drawOverlay(0)).observe(els.propsOverlay);
   document.fonts?.addEventListener?.('loadingdone', () => state === 'idle' && drawOverlay(0));
   renderProps();
@@ -460,6 +522,8 @@ function renderProps() {
   els.propSets.querySelectorAll('.prop-choice').forEach((b) => b.classList.toggle('selected', b.dataset.set === s.set));
   if (document.activeElement !== els.phrases) els.phrases.value = s.phrases.join('\n');
   els.guestPropsToggle.checked = s.guestChoice;
+  els.followFacesToggle.checked = s.followFaces;
+  renderTrackingStatus();
   renderGuestProps();
   if (state === 'idle') drawOverlay(0);
 }

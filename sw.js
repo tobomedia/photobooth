@@ -1,6 +1,6 @@
 // Offline support: cache the app so a refresh at the party works without internet.
 // Bump VERSION whenever you deploy changes, so devices pick up the new files.
-const VERSION = 'photobooth-v14';
+const VERSION = 'photobooth-v15';
 
 const FILES = [
   './',
@@ -13,6 +13,7 @@ const FILES = [
   './js/backgrounds.js',
   './js/gallery.js',
   './js/props.js',
+  './js/faces.js',
   './js/store.js',
   './js/exporter.js',
   './js/zip.js',
@@ -21,6 +22,11 @@ const FILES = [
   './fonts/caveat.woff2',
   './fonts/playfairdisplay.woff2',
   './fonts/bebasneue.woff2',
+  // Face tracking (about 14 MB): cached so it works offline even if it's switched on later.
+  './vendor/mediapipe/vision_bundle.mjs',
+  './vendor/mediapipe/wasm/vision_wasm_internal.js',
+  './vendor/mediapipe/wasm/vision_wasm_internal.wasm',
+  './vendor/mediapipe/blaze_face_short_range.tflite',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
