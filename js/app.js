@@ -56,6 +56,8 @@ const els = {
   stylePreview: $('style-preview'),
   propsOverlay: $('props-overlay'),
   propCue: $('prop-cue'),
+  cycleProps: $('cycle-props'),
+  cycleIcon: $('cycle-icon'),
   guestProps: $('guest-props'),
   propSets: $('prop-sets'),
   phrases: $('phrases'),
@@ -181,6 +183,8 @@ async function onStart() {
   goFullscreen();
   keepAwake();
   hideMessage();
+  clearTimeout(cycleCueTimer); // the Turn's own cues take over
+  els.propCue.hidden = true;
   setState('turn');
   els.dots.forEach((d) => d.classList.remove('taken'));
   turnAbort = new AbortController();
@@ -459,13 +463,36 @@ async function revealProps(shot) {
   if (!prop?.draw || !changed) return;
   els.propCue.textContent = `${prop.icon} ${prop.cue}`;
   els.propCue.hidden = false;
-  [els.propsOverlay, els.propCue].forEach((el) => {
+  pop(els.propsOverlay, els.propCue);
+  await sleep(CONFIG.propRevealMs);
+  els.propCue.hidden = true;
+}
+
+function pop(...elements) {
+  elements.forEach((el) => {
     el.classList.remove('pop');
     void el.offsetWidth; // restart the animation
     el.classList.add('pop');
   });
-  await sleep(CONFIG.propRevealMs);
-  els.propCue.hidden = true;
+}
+
+// The start screen's cycle button: each tap tries the next prop set on the live camera,
+// and the Turn uses whichever is showing. Goes back to the Host's choice after each Turn.
+const CYCLE = PROP_SETS.filter((p) => p.id !== 'none');
+let cycleCueTimer = null;
+
+function cycleProps() {
+  if (state !== 'idle') return;
+  const current = guestPick ?? propSettings().set;
+  const next = CYCLE[(CYCLE.findIndex((p) => p.id === current) + 1) % CYCLE.length];
+  guestPick = next.id;
+  renderGuestProps();
+  drawOverlay(0);
+  els.propCue.textContent = next.id === 'mix' ? `${next.icon} Mix: a surprise every photo!` : `${next.icon} ${next.name}`;
+  els.propCue.hidden = false;
+  pop(els.propsOverlay, els.propCue, els.cycleIcon);
+  clearTimeout(cycleCueTimer);
+  cycleCueTimer = setTimeout(() => (els.propCue.hidden = true), 1500);
 }
 
 function propButtons(container, onPick) {
@@ -550,6 +577,7 @@ function setupProps() {
     savePropSettings({ followFaces: els.followFacesToggle.checked });
     updateTracking();
   });
+  els.cycleProps.addEventListener('click', cycleProps);
   new ResizeObserver(() => drawOverlay(0)).observe(els.propsOverlay);
   document.fonts?.addEventListener?.('loadingdone', () => state === 'idle' && drawOverlay(0));
   renderProps();
@@ -570,6 +598,7 @@ function renderGuestProps() {
   const s = propSettings();
   els.guestProps.hidden = !s.guestChoice;
   const current = guestPick ?? s.set;
+  els.cycleIcon.textContent = PROP_SETS.find((p) => p.id === current)?.icon ?? '🔀';
   els.guestProps.querySelectorAll('.prop-choice').forEach((b) => b.classList.toggle('selected', b.dataset.set === current));
 }
 

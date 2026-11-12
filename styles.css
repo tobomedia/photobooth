@@ -1,4 +1,5 @@
 :root {
+  --start-size: clamp(140px, 20vh, 240px);
   --bg: #111;
   --fg: #fff;
   --accent: #ff4f6d;
@@ -95,6 +96,8 @@ button.danger { background: var(--danger); }
 }
 #props-overlay.pop { animation: props-pop 450ms cubic-bezier(0.34, 1.56, 0.64, 1); }
 #prop-cue.pop { animation: cue-pop 450ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+/* On the start screen the Start button covers the bottom of the camera: name the props above it. */
+body[data-state="idle"] #prop-cue { bottom: calc(var(--start-size) / 2 + 16px); }
 @keyframes props-pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes cue-pop { from { transform: translateX(-50%) scale(0.5); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
 
@@ -133,6 +136,7 @@ button.danger { background: var(--danger); }
 .dot.taken { background: var(--fg); }
 
 #controls {
+  position: relative;
   min-height: 80px;
   display: flex;
   flex-direction: column;
@@ -146,13 +150,12 @@ button.danger { background: var(--danger); }
 body:not([data-state="idle"]) #guest-props { display: none; }
 /* The Start button: big, round, half over the camera view, glowing, gently bouncing and cycling through colours. */
 #start {
-  --size: clamp(140px, 20vh, 240px);
   /* Pulled up over the camera view by half its height: past the two gaps (3vh each) and
      the progress dots (20px) between the camera and the controls. */
-  margin-top: calc(-1 * (6vh + 20px + var(--size) / 2));
+  margin-top: calc(-1 * (6vh + 20px + var(--start-size) / 2));
   position: relative;
   z-index: 3;
-  width: var(--size);
+  width: var(--start-size);
   aspect-ratio: 1;
   border-radius: 50%;
   padding: 0;
@@ -174,6 +177,44 @@ body:not([data-state="idle"]) #guest-props { display: none; }
 }
 #review-controls { display: none; gap: 16px; flex-wrap: wrap; justify-content: center; }
 .warning { color: #ffb4a8; margin: 0; }
+
+/* Beside Start, centred on the camera's bottom edge too: tries the next prop set. */
+#cycle-props {
+  --c: clamp(64px, 9vh, 96px);
+  position: absolute;
+  left: calc(50% + var(--start-size) / 2 + 20px);
+  top: calc(-6vh - 20px - var(--c) / 2);
+  z-index: 3;
+  width: var(--c);
+  height: var(--c);
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(25, 25, 25, 0.85);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-size: calc(var(--c) * 0.5);
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+#cycle-props:active { transform: scale(0.92); }
+#cycle-icon { display: inline-block; }
+#cycle-icon.pop { animation: cycle-spin 450ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes cycle-spin { from { transform: rotate(-180deg) scale(0.4); } to { transform: rotate(0) scale(1); } }
+.cycle-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 42%;
+  height: 42%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: calc(var(--c) * 0.24);
+  font-weight: 800;
+  box-shadow: 0 0 0 2px #fff;
+}
+body:not([data-state="idle"]) #cycle-props { display: none; }
 
 /* Stops a Turn part-way; only shown while one is running. */
 #cancel {

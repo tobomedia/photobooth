@@ -25,6 +25,7 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 | Who | What |
 | --- | --- |
 | Guest | Tap **Start** → 4 countdowns → Grid stays on screen until **Done** → back to Start. |
+| Guest | Tap the small **↻ button** next to Start to try the next set of props on the camera; the Turn uses whichever is showing. Goes back to the Host's choice after each Turn. |
 | Guest | Tap **✕ Cancel** (top right) during a Turn to stop it. Nothing from that Turn is saved. |
 | Guest or Host | Tap **▦ Grids** (bottom right) to see every Grid taken so far, newest first. Tap one to see it full size. Closes itself after a minute of no touches. |
 | Host | **Press and hold the top-left corner for 3 seconds** to open the Host panel. |
