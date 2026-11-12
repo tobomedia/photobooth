@@ -139,18 +139,24 @@ button.danger { background: var(--danger); }
   align-items: center;
   gap: 10px;
 }
-#guest-props { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 100%; }
+#guest-props { order: 1; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 100%; }
 #guest-props .prop-choice { padding: 6px 10px; background: #2a2a2a; border: 2px solid transparent; border-radius: 12px; font-size: 1.6rem; line-height: 1; }
 #guest-props .prop-choice.selected { border-color: var(--accent); background: #3a2228; }
 #guest-props .prop-name { display: none; }
 body:not([data-state="idle"]) #guest-props { display: none; }
-/* The Start button: big, round, glowing, gently bouncing and cycling through colours. */
+/* The Start button: big, round, half over the camera view, glowing, gently bouncing and cycling through colours. */
 #start {
-  width: clamp(110px, 14vh, 180px);
+  --size: clamp(140px, 20vh, 240px);
+  /* Pulled up over the camera view by half its height: past the two gaps (3vh each) and
+     the progress dots (20px) between the camera and the controls. */
+  margin-top: calc(-1 * (6vh + 20px + var(--size) / 2));
+  position: relative;
+  z-index: 3;
+  width: var(--size);
   aspect-ratio: 1;
   border-radius: 50%;
   padding: 0;
-  font-size: clamp(1.5rem, 3.4vh, 2.4rem);
+  font-size: clamp(1.8rem, 4.2vh, 3rem);
   font-weight: 800;
   letter-spacing: 0.04em;
   background: linear-gradient(135deg, #ff4f6d, #ff9f1c);
