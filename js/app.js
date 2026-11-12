@@ -1,5 +1,6 @@
 import { startCamera, listCameras, capturePhoto } from './camera.js';
 import { composeGrid, previewGrid, canvasToBlob, FONTS, loadFonts } from './grid.js';
+import { PATTERNS, drawBackground } from './backgrounds.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
 
@@ -44,6 +45,7 @@ const els = {
   dateToggle: $('date-toggle'),
   swatches: $('swatches'),
   fonts: $('fonts'),
+  patterns: $('patterns'),
   colour: $('colour'),
   stylePreview: $('style-preview'),
   clear: $('clear'),
@@ -223,13 +225,13 @@ function gridStyle() {
   } catch {
     /* use the defaults */
   }
-  return { caption: '', showDate: false, font: 'system', ...CONFIG.grid, ...saved };
+  return { caption: '', showDate: false, font: 'system', pattern: 'plain', ...CONFIG.grid, ...saved };
 }
 
 function saveGridStyle(changes) {
-  const { caption, showDate, background, font } = { ...gridStyle(), ...changes };
+  const { caption, showDate, background, font, pattern } = { ...gridStyle(), ...changes };
   try {
-    localStorage.setItem(STYLE_KEY, JSON.stringify({ caption, showDate, background, font }));
+    localStorage.setItem(STYLE_KEY, JSON.stringify({ caption, showDate, background, font, pattern }));
   } catch {
     showMessage('Could not save the Grid style on this device.', { timeoutMs: 4000 });
   }
@@ -262,6 +264,23 @@ function setupStyle() {
       return b;
     }),
   );
+  els.patterns.replaceChildren(
+    ...PATTERNS.map((p) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pattern-choice';
+      b.dataset.pattern = p.id;
+      b.setAttribute('aria-label', p.name);
+      const thumb = document.createElement('canvas');
+      thumb.width = 120;
+      thumb.height = 72;
+      const name = document.createElement('span');
+      name.textContent = p.name;
+      b.append(thumb, name);
+      b.addEventListener('click', () => saveGridStyle({ pattern: p.id }));
+      return b;
+    }),
+  );
   els.colour.addEventListener('input', () => saveGridStyle({ background: els.colour.value }));
   els.caption.addEventListener('input', () => saveGridStyle({ caption: els.caption.value }));
   els.dateToggle.addEventListener('change', () => saveGridStyle({ showDate: els.dateToggle.checked }));
@@ -273,6 +292,11 @@ function renderStyle() {
   els.dateToggle.checked = style.showDate;
   els.colour.value = style.background;
   els.swatches.querySelectorAll('.swatch').forEach((b) => b.classList.toggle('selected', b.dataset.colour === style.background));
+  els.patterns.querySelectorAll('.pattern-choice').forEach((b) => {
+    b.classList.toggle('selected', b.dataset.pattern === style.pattern);
+    const thumb = b.querySelector('canvas');
+    drawBackground(thumb.getContext('2d'), thumb.width, thumb.height, { background: style.background, pattern: b.dataset.pattern }, 0.4);
+  });
   els.fonts.querySelectorAll('.font-choice').forEach((b) => b.classList.toggle('selected', b.dataset.font === style.font));
   const canvas = previewGrid(style);
   const ctx = els.stylePreview.getContext('2d');

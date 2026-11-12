@@ -1,5 +1,7 @@
 // Compose four Photos into one 2×2 Grid image, with an optional caption band underneath.
 
+import { drawBackground } from './backgrounds.js';
+
 const SYSTEM = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 // Fonts for the caption. Files live in /fonts so they work offline. `scale` evens out
@@ -57,7 +59,7 @@ function bandHeight(lines, pw) {
   return Math.round(pw * (0.12 + lines.reduce((h, l) => h + l.size * 1.3, 0)));
 }
 
-export function composeGrid(photos, { gap, border, background, caption, showDate, font }, date = new Date()) {
+export function composeGrid(photos, { gap, border, background, pattern, caption, showDate, font }, date = new Date()) {
   if (photos.length !== 4) throw new Error(`a Grid needs 4 Photos, got ${photos.length}`);
   const pw = photos[0].width;
   const ph = photos[0].height;
@@ -70,8 +72,21 @@ export function composeGrid(photos, { gap, border, background, caption, showDate
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, width, height);
+
+  // Work out where the caption goes first, so busy backgrounds can keep clear of it.
+  const maxWidth = width - border * 2;
+  const top = border + ph * 2 + gap;
+  const textHeight = lines.reduce((h, l) => h + l.size * 1.3 * pw, 0);
+  let avoid = null;
+  if (lines.length) {
+    const textWidth = Math.min(maxWidth, Math.max(...lines.map((l) => {
+      ctx.font = l.font.replace('SIZE', l.size * pw);
+      return ctx.measureText(l.text).width;
+    })));
+    const pad = pw * 0.05;
+    avoid = { x: (width - textWidth) / 2 - pad, y: top + (band - textHeight) / 2 - pad, w: textWidth + pad * 2, h: textHeight + pad * 2 };
+  }
+  drawBackground(ctx, width, height, { background, pattern }, pw / 900, avoid);
 
   photos.forEach((photo, i) => {
     const col = i % 2;
@@ -83,9 +98,6 @@ export function composeGrid(photos, { gap, border, background, caption, showDate
     ctx.fillStyle = textColourFor(background);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const maxWidth = width - border * 2;
-    const top = border + ph * 2 + gap;
-    const textHeight = lines.reduce((h, l) => h + l.size * 1.3 * pw, 0);
     let y = top + (band - textHeight) / 2;
     for (const line of lines) {
       const px = line.size * pw;

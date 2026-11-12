@@ -31,7 +31,7 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 
 - **Share Grids 1–30, 31–60, …** — opens the share sheet; pick Google Photos (or "Save Images"). Done in batches because some phones limit how many files one share can carry. A ✓ marks batches already shared.
 - **Download all as zip** — fallback if sharing doesn't work.
-- **Grid style** — text printed under the Photos (e.g. names and occasion), its font, an optional date, and the background colour. Text is black or white automatically to suit the colour. A small preview shows the result. Changes apply to the next Turn.
+- **Grid style** — text printed under the Photos (e.g. names and occasion), its font, an optional date, the background colour, and a background pattern (plain, gradient, dots, stripes, hearts or confetti). Text is black or white automatically to suit the colour. A small preview shows the result. Changes apply to the next Turn.
 - **Camera** — which camera the booth uses (front, back, or a plugged-in USB camera). Remembered on the device. Front cameras are mirrored; back cameras aren't.
 - **Backup** — when on (default on Android/desktop, off on iPhone), each Grid is also downloaded to the device's Downloads folder as it's taken, so a copy survives even if the browser's storage is cleared. On Android it shows up in Google Photos / Gallery.
 - **Printing** — when on, a **Print** button appears after each Turn and prints 4 copies of the Grid on one A4 portrait sheet with cut lines. Someone has to tap through the phone's print dialog.
