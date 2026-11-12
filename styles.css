@@ -354,6 +354,10 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
 .host-card button { font-size: 1.1rem; padding: 14px 22px; width: 100%; margin-top: 8px; }
 .host-card button.small { width: auto; margin-top: 0; }
 .host-card .note { color: #666; font-size: 0.9rem; }
+#paper-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.host-card #paper-choice button { margin: 0; border-radius: 10px; background: #f1f1f1; color: var(--card-fg); border: 2px solid transparent; font-size: 1rem; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+.host-card #paper-choice button small { font-size: 0.75rem; font-weight: 400; color: #666; }
+.host-card #paper-choice button.selected { border-color: var(--accent); background: #fff0f3; }
 #camera-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .host-card #camera-choice button { margin: 0; border-radius: 10px; background: #f1f1f1; color: var(--card-fg); border: 2px solid transparent; }
 .host-card #camera-choice button.selected { border-color: var(--accent); background: #fff0f3; }
@@ -426,7 +430,7 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   #rotate { display: grid; }
 }
 
-/* ---------- Print: 4 copies of the Grid (or strip) on one A4 portrait sheet ---------- */
+/* ---------- Print: 4×6″ photo paper, or 4 copies on one A4 sheet ---------- */
 
 #print-sheet { display: none; }
 
@@ -459,4 +463,10 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   #print-sheet.strip { grid-template-columns: repeat(4, 52.5mm); grid-template-rows: 297mm; }
   #print-sheet.strip .cell { border-bottom: none; border-right: 0.3mm dashed #bbb; padding: 5mm 4mm; }
   #print-sheet.strip .cell:last-child { border-right-color: transparent; } /* keeps all 4 the same size */
+  /* 4×6″ photo paper: one Grid, or two Strips with a cut line between them */
+  #print-sheet.photo { grid-template-columns: 4in; grid-template-rows: 6in; width: 4in; height: 6in; }
+  #print-sheet.photo .cell { border: none; padding: 3mm; }
+  #print-sheet.photo.strip { grid-template-columns: 2in 2in; grid-template-rows: 6in; }
+  #print-sheet.photo.strip .cell { border-right: 0.3mm dashed #bbb; padding: 3mm 2mm; }
+  #print-sheet.photo.strip .cell:last-child { border-right-color: transparent; }
 }

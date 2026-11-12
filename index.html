@@ -132,8 +132,14 @@
       <h3>Printing</h3>
       <label class="toggle">
         <input type="checkbox" id="print-toggle">
-        Show a Print button after each Turn (4 copies per A4 sheet)
+        Show a Print button after each Turn
       </label>
+      <label>Paper</label>
+      <div id="paper-choice">
+        <button type="button" data-paper="photo">4×6″ photo paper<small>1 per Turn (Strips: 2 to cut apart)</small></button>
+        <button type="button" data-paper="a4">A4<small>4 copies with cut lines</small></button>
+      </div>
+      <p class="note">For a photo printer such as a Canon Selphy, pick 4×6″, then in the print dialog choose the printer and 4×6″ / postcard paper. Android remembers both after the first time.</p>
 
       <h3>Event</h3>
       <button id="clear" class="danger">Clear &amp; start new Event</button>
