@@ -598,7 +598,6 @@ function renderGuestProps() {
   const s = propSettings();
   els.guestProps.hidden = !s.guestChoice;
   const current = guestPick ?? s.set;
-  els.cycleIcon.textContent = PROP_SETS.find((p) => p.id === current)?.icon ?? '🔀';
   els.guestProps.querySelectorAll('.prop-choice').forEach((b) => b.classList.toggle('selected', b.dataset.set === current));
 }
 
