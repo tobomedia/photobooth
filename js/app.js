@@ -19,6 +19,7 @@ const PRINT_KEY = 'photobooth.printEnabled';
 const BACKUP_KEY = 'photobooth.backupEnabled';
 const CAMERA_KEY = 'photobooth.cameraId';
 const STYLE_KEY = 'photobooth.gridStyle';
+const SWITCHED_KEY = 'photobooth.cameraSwitched';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -95,8 +96,15 @@ function chosenCameraId() {
 }
 
 // `switching` is true when the Host has just picked a camera, so a failure is shown, not hidden.
-async function initCamera({ switching = false } = {}) {
+async function initCamera() {
   els.start.disabled = true;
+  let switching = false;
+  try {
+    switching = sessionStorage.getItem(SWITCHED_KEY) === '1';
+    sessionStorage.removeItem(SWITCHED_KEY);
+  } catch {
+    /* not important */
+  }
   try {
     const chosen = chosenCameraId();
     let fallbackNote = null;
@@ -106,11 +114,13 @@ async function initCamera({ switching = false } = {}) {
       if (!chosen || err.name === 'NotAllowedError') throw err;
       // The chosen camera wouldn't start (unplugged, busy, or the browser reset its ids): use the default one.
       console.warn('Chosen camera unavailable, using the default', err);
-      fallbackNote = `Couldn't start that camera (${err.name}: ${err.message}), so the front camera is being used.`;
+      const name = (await listCameras().catch(() => [])).find((c) => c.deviceId === chosen)?.label || 'that camera';
+      fallbackNote = `Couldn't start ${name} even after a fresh start (${err.name}: ${err.message}), so the front camera is being used.`;
       camera = await startCamera(els.preview);
     }
     els.preview.classList.toggle('unmirrored', !mirrored());
     if (fallbackNote) showMessage(fallbackNote, { timeoutMs: switching ? 0 : 8000 });
+    else if (switching) showMessage('Camera switched.', { timeoutMs: 3000 });
     else hideMessage();
     els.start.disabled = false;
   } catch (err) {
@@ -378,9 +388,15 @@ function setupHost() {
     } catch {
       showMessage('Could not save the camera setting on this device.', { timeoutMs: 4000 });
     }
+    // Reload rather than switch in place: some Android tablets keep the old camera locked
+    // until the page closes, so the new one can only be opened from a fresh start.
     els.cameraSelect.disabled = true;
-    await initCamera({ switching: true });
-    await renderCameras();
+    try {
+      sessionStorage.setItem(SWITCHED_KEY, '1');
+    } catch {
+      /* only used to show a confirmation */
+    }
+    location.reload();
   });
   els.zip.addEventListener('click', onZip);
   els.clear.addEventListener('click', onClear);
