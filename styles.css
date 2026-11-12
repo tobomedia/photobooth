@@ -203,6 +203,8 @@ body[data-state="review"] #review-controls { display: flex; }
   justify-content: space-between;
 }
 #message p { margin: 0; }
+.message-actions { display: flex; gap: 8px; flex: none; }
+#message-close { padding: 10px 16px; }
 
 #rotate {
   display: none;

@@ -53,6 +53,7 @@ const els = {
   message: $('message'),
   messageText: $('message-text'),
   messageRetry: $('message-retry'),
+  messageClose: $('message-close'),
   printSheet: $('print-sheet'),
 };
 
@@ -79,6 +80,7 @@ function showMessage(text, { retry = null, timeoutMs = 0 } = {}) {
   if (timeoutMs) messageTimer = setTimeout(hideMessage, timeoutMs);
 }
 function hideMessage() {
+  clearTimeout(messageTimer);
   els.message.hidden = true;
 }
 
@@ -543,6 +545,7 @@ function registerServiceWorker() {
 
 els.start.addEventListener('click', onStart);
 els.done.addEventListener('click', endReview);
+els.messageClose.addEventListener('click', hideMessage);
 els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();

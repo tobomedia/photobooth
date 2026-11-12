@@ -1,6 +1,6 @@
 // Offline support: cache the app so a refresh at the party works without internet.
 // Bump VERSION whenever you deploy changes, so devices pick up the new files.
-const VERSION = 'photobooth-v9';
+const VERSION = 'photobooth-v10';
 
 const FILES = [
   './',
