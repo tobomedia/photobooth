@@ -54,6 +54,19 @@
       <p id="share-note" class="note" hidden>This browser can't open the share sheet with files — use the zip instead.</p>
       <button id="zip" class="secondary">Download all as zip</button>
 
+      <h3>Grid style</h3>
+      <div class="style-row">
+        <canvas id="style-preview" aria-label="Preview of the Grid style"></canvas>
+        <div class="style-fields">
+          <label for="caption">Text under the Photos</label>
+          <input id="caption" type="text" maxlength="60" placeholder="e.g. Sam &amp; Alex's 30th" autocomplete="off">
+          <label class="toggle"><input type="checkbox" id="date-toggle"> Add today's date</label>
+          <label>Colour</label>
+          <div id="swatches"></div>
+          <label class="custom-colour">Other colour <input id="colour" type="color"></label>
+        </div>
+      </div>
+
       <h3>Camera</h3>
       <select id="camera-select" aria-label="Camera"></select>
 

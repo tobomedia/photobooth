@@ -1,5 +1,5 @@
 import { startCamera, listCameras, capturePhoto } from './camera.js';
-import { composeGrid, canvasToBlob } from './grid.js';
+import { composeGrid, previewGrid, canvasToBlob } from './grid.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
 
@@ -17,6 +17,7 @@ const CONFIG = {
 const PRINT_KEY = 'photobooth.printEnabled';
 const BACKUP_KEY = 'photobooth.backupEnabled';
 const CAMERA_KEY = 'photobooth.cameraId';
+const STYLE_KEY = 'photobooth.gridStyle';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -39,6 +40,11 @@ const els = {
   printToggle: $('print-toggle'),
   backupToggle: $('backup-toggle'),
   cameraSelect: $('camera-select'),
+  caption: $('caption'),
+  dateToggle: $('date-toggle'),
+  swatches: $('swatches'),
+  colour: $('colour'),
+  stylePreview: $('style-preview'),
   clear: $('clear'),
   message: $('message'),
   messageText: $('message-text'),
@@ -127,7 +133,7 @@ async function onStart() {
       if (i < CONFIG.photosPerTurn - 1) await sleep(CONFIG.pauseBetweenPhotosMs);
     }
 
-    const canvas = composeGrid(photos, CONFIG.grid);
+    const canvas = composeGrid(photos, gridStyle());
     const blob = await canvasToBlob(canvas, CONFIG.grid.jpegQuality);
     photos.forEach((p) => (p.width = 0)); // free canvas memory on small devices
     canvas.width = 0;
@@ -201,6 +207,62 @@ function backupEnabled() {
   }
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   return !ios;
+}
+
+// ---------- Grid style: caption and colour ----------
+
+const SWATCHES = ['#ffffff', '#111111', '#ff4f6d', '#f7c8d0', '#ffd23f', '#3a86ff', '#2a9d8f', '#c8b6ff'];
+
+// The Host's saved caption/colour on top of the defaults in CONFIG.
+function gridStyle() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(STYLE_KEY) || '{}');
+  } catch {
+    /* use the defaults */
+  }
+  return { caption: '', showDate: false, ...CONFIG.grid, ...saved };
+}
+
+function saveGridStyle(changes) {
+  const { caption, showDate, background } = { ...gridStyle(), ...changes };
+  try {
+    localStorage.setItem(STYLE_KEY, JSON.stringify({ caption, showDate, background }));
+  } catch {
+    showMessage('Could not save the Grid style on this device.', { timeoutMs: 4000 });
+  }
+  renderStyle();
+}
+
+function setupStyle() {
+  els.swatches.replaceChildren(
+    ...SWATCHES.map((colour) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch';
+      b.style.background = colour;
+      b.dataset.colour = colour;
+      b.setAttribute('aria-label', colour);
+      b.addEventListener('click', () => saveGridStyle({ background: colour }));
+      return b;
+    }),
+  );
+  els.colour.addEventListener('input', () => saveGridStyle({ background: els.colour.value }));
+  els.caption.addEventListener('input', () => saveGridStyle({ caption: els.caption.value }));
+  els.dateToggle.addEventListener('change', () => saveGridStyle({ showDate: els.dateToggle.checked }));
+}
+
+function renderStyle() {
+  const style = gridStyle();
+  if (document.activeElement !== els.caption) els.caption.value = style.caption;
+  els.dateToggle.checked = style.showDate;
+  els.colour.value = style.background;
+  els.swatches.querySelectorAll('.swatch').forEach((b) => b.classList.toggle('selected', b.dataset.colour === style.background));
+  const canvas = previewGrid(style);
+  const ctx = els.stylePreview.getContext('2d');
+  els.stylePreview.width = canvas.width;
+  els.stylePreview.height = canvas.height;
+  ctx.drawImage(canvas, 0, 0);
 }
 
 // ---------- Printing ----------
@@ -286,6 +348,7 @@ async function openHost() {
   els.printToggle.checked = printEnabled();
   els.backupToggle.checked = backupEnabled();
   els.host.hidden = false;
+  renderStyle();
   await Promise.all([renderHost(), renderCameras()]);
 }
 
@@ -297,10 +360,11 @@ async function renderCameras() {
     console.error(err);
   }
   const options = cameras.map(({ deviceId, label }) => new Option(label, deviceId));
-  if (!options.length) options.push(new Option('No camera found', ''));
+  const inUse = cameras.some((c) => c.deviceId === camera.deviceId);
+  if (!inUse) options.unshift(new Option(cameras.length ? 'Camera not started — pick one' : 'No camera found', '', true, true));
   els.cameraSelect.replaceChildren(...options);
-  els.cameraSelect.value = camera.deviceId ?? '';
-  els.cameraSelect.disabled = cameras.length < 2;
+  if (inUse) els.cameraSelect.value = camera.deviceId;
+  els.cameraSelect.disabled = cameras.length === 0 || (inUse && cameras.length < 2);
 }
 
 async function renderHost() {
@@ -419,6 +483,7 @@ els.done.addEventListener('click', endReview);
 els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();
+setupStyle();
 registerServiceWorker();
 keepAwake();
 navigator.storage?.persist?.().catch(() => {});
