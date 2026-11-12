@@ -1,6 +1,7 @@
 import { startCamera, capturePhoto } from './camera.js';
-import { composeGrid, previewGrid, canvasToBlob, FONTS, loadFonts } from './grid.js';
+import { composeGrid, previewGrid, canvasToBlob, FONTS, fontById, loadFonts } from './grid.js';
 import { PATTERNS, drawBackground } from './backgrounds.js';
+import { PROP_SETS, DEFAULT_PHRASES, drawProps } from './props.js';
 import { setupGallery, openGallery, closeGallery, galleryOpen } from './gallery.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
@@ -20,6 +21,7 @@ const PRINT_KEY = 'photobooth.printEnabled';
 const BACKUP_KEY = 'photobooth.backupEnabled';
 const CAMERA_KEY = 'photobooth.cameraFacing'; // 'user' (front, default) or 'environment' (back)
 const STYLE_KEY = 'photobooth.gridStyle';
+const PROPS_KEY = 'photobooth.props';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -49,6 +51,11 @@ const els = {
   patterns: $('patterns'),
   colour: $('colour'),
   stylePreview: $('style-preview'),
+  propsOverlay: $('props-overlay'),
+  guestProps: $('guest-props'),
+  propSets: $('prop-sets'),
+  phrases: $('phrases'),
+  guestPropsToggle: $('guest-props-toggle'),
   clear: $('clear'),
   message: $('message'),
   messageText: $('message-text'),
@@ -153,12 +160,16 @@ async function onStart() {
   hideMessage();
   setState('turn');
   els.dots.forEach((d) => d.classList.remove('taken'));
+  await loadFonts(); // speech bubbles use the Grid font
 
   try {
     const photos = [];
     for (let i = 0; i < CONFIG.photosPerTurn; i++) {
+      drawOverlay(i);
       await countdown(CONFIG.countdownSeconds);
-      photos.push(capturePhoto(els.preview, { ...CONFIG.photo, mirror: mirrored() }));
+      const photo = capturePhoto(els.preview, { ...CONFIG.photo, mirror: mirrored() });
+      drawProps(photo.getContext('2d'), photo.width, photo.height, propsForTurn(), i);
+      photos.push(photo);
       flash();
       els.dots[i].classList.add('taken');
       if (i < CONFIG.photosPerTurn - 1) await sleep(CONFIG.pauseBetweenPhotosMs);
@@ -218,6 +229,9 @@ function showReview(file, saved) {
 
 function endReview() {
   if (state !== 'review') return;
+  guestPick = null; // the next group starts from the Host's choice
+  renderGuestProps();
+  drawOverlay(0);
   els.result.hidden = true;
   els.result.removeAttribute('src');
   els.printSheet.replaceChildren();
@@ -333,6 +347,106 @@ function renderStyle() {
   ctx.drawImage(canvas, 0, 0);
 }
 
+// ---------- Props ----------
+
+let guestPick = null; // a set chosen on the start screen for this Turn only
+
+function propSettings() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(PROPS_KEY) || '{}');
+  } catch {
+    /* use the defaults */
+  }
+  return { set: 'none', phrases: DEFAULT_PHRASES, guestChoice: false, ...saved };
+}
+
+function savePropSettings(changes) {
+  try {
+    localStorage.setItem(PROPS_KEY, JSON.stringify({ ...propSettings(), ...changes }));
+  } catch {
+    showMessage('Could not save the props setting on this device.', { timeoutMs: 4000 });
+  }
+  renderProps();
+}
+
+// What this Turn uses: the guest's pick if they made one, else the Host's choice.
+function propsForTurn() {
+  const s = propSettings();
+  return { set: guestPick ?? s.set, phrases: s.phrases, font: fontById(gridStyle().font).family };
+}
+
+// The overlay canvas covers the camera preview exactly (both are 3:4), so props drawn
+// at the same fractions land in the same place as in the saved Photo.
+function drawOverlay(shot = 0) {
+  const canvas = els.propsOverlay;
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(canvas.clientWidth * dpr);
+  const h = Math.round(canvas.clientHeight * dpr);
+  if (!w || !h) return;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  drawProps(ctx, w, h, propsForTurn(), shot);
+}
+
+function propButtons(container, onPick) {
+  container.replaceChildren(
+    ...PROP_SETS.map((p) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'prop-choice';
+      b.dataset.set = p.id;
+      b.title = p.name;
+      b.setAttribute('aria-label', p.name);
+      const icon = document.createElement('span');
+      icon.className = 'prop-icon';
+      icon.textContent = p.icon;
+      const name = document.createElement('span');
+      name.className = 'prop-name';
+      name.textContent = p.name;
+      b.append(icon, name);
+      b.addEventListener('click', () => onPick(p.id));
+      return b;
+    }),
+  );
+}
+
+function setupProps() {
+  propButtons(els.propSets, (id) => savePropSettings({ set: id }));
+  propButtons(els.guestProps, (id) => {
+    guestPick = id;
+    renderGuestProps();
+    drawOverlay(0);
+  });
+  els.phrases.addEventListener('input', () => {
+    savePropSettings({ phrases: els.phrases.value.split('\n') });
+  });
+  els.guestPropsToggle.addEventListener('change', () => savePropSettings({ guestChoice: els.guestPropsToggle.checked }));
+  new ResizeObserver(() => drawOverlay(0)).observe(els.propsOverlay);
+  document.fonts?.addEventListener?.('loadingdone', () => state === 'idle' && drawOverlay(0));
+  renderProps();
+}
+
+function renderProps() {
+  const s = propSettings();
+  els.propSets.querySelectorAll('.prop-choice').forEach((b) => b.classList.toggle('selected', b.dataset.set === s.set));
+  if (document.activeElement !== els.phrases) els.phrases.value = s.phrases.join('\n');
+  els.guestPropsToggle.checked = s.guestChoice;
+  renderGuestProps();
+  if (state === 'idle') drawOverlay(0);
+}
+
+function renderGuestProps() {
+  const s = propSettings();
+  els.guestProps.hidden = !s.guestChoice;
+  const current = guestPick ?? s.set;
+  els.guestProps.querySelectorAll('.prop-choice').forEach((b) => b.classList.toggle('selected', b.dataset.set === current));
+}
+
 // ---------- Printing ----------
 
 function printEnabled() {
@@ -416,6 +530,7 @@ async function openHost() {
   els.backupToggle.checked = backupEnabled();
   els.host.hidden = false;
   renderStyle();
+  renderProps();
   renderCameraChoice();
   await renderHost();
 }
@@ -542,6 +657,7 @@ els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();
 setupStyle();
+setupProps();
 loadFonts().then(() => !els.host.hidden && renderStyle());
 registerServiceWorker();
 keepAwake();

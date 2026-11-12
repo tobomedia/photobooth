@@ -19,6 +19,7 @@
   <main id="booth">
     <div id="stage">
       <video id="preview" playsinline muted autoplay></video>
+      <canvas id="props-overlay" aria-hidden="true"></canvas>
       <div id="countdown" aria-live="assertive"></div>
       <div id="flash"></div>
       <img id="result" alt="Your Grid" hidden>
@@ -29,6 +30,7 @@
     </div>
 
     <div id="controls">
+      <div id="guest-props" hidden aria-label="Choose props"></div>
       <button id="start" disabled>Start</button>
       <div id="review-controls">
         <button id="print" class="secondary" hidden>Print</button>
@@ -88,6 +90,13 @@
           <div id="patterns"></div>
         </div>
       </div>
+
+      <h3>Props</h3>
+      <p class="note">Shown over the camera so guests can line up with them, and saved in the Photos.</p>
+      <div id="prop-sets"></div>
+      <label for="phrases" class="field-label">Speech bubble phrases (one per line)</label>
+      <textarea id="phrases" rows="4"></textarea>
+      <label class="toggle"><input type="checkbox" id="guest-props-toggle"> Let guests choose props on the start screen</label>
 
       <h3>Camera</h3>
       <div id="camera-choice">

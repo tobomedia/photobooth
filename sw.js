@@ -1,6 +1,6 @@
 // Offline support: cache the app so a refresh at the party works without internet.
 // Bump VERSION whenever you deploy changes, so devices pick up the new files.
-const VERSION = 'photobooth-v12';
+const VERSION = 'photobooth-v13';
 
 const FILES = [
   './',
@@ -12,6 +12,7 @@ const FILES = [
   './js/grid.js',
   './js/backgrounds.js',
   './js/gallery.js',
+  './js/props.js',
   './js/store.js',
   './js/exporter.js',
   './js/zip.js',

@@ -15,7 +15,7 @@ export const FONTS = [
   { id: 'bebas', name: 'Bebas Neue', family: 'Bebas Neue', file: 'fonts/bebasneue.woff2', weight: 400, scale: 1.3 },
 ];
 
-const fontById = (id) => FONTS.find((f) => f.id === id) ?? FONTS[0];
+export const fontById = (id) => FONTS.find((f) => f.id === id) ?? FONTS[0];
 
 // Canvas text silently falls back to another font if the chosen one hasn't loaded,
 // so this must finish before a Grid is drawn.
