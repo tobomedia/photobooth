@@ -10,27 +10,40 @@ export const DEFAULT_PHRASES = ['Party time!', 'Cheers!', 'Say cheese!', 'Best n
 
 const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 
+// `cue` is announced before the Photo so guests know what to line up with.
 export const PROP_SETS = [
   { id: 'none', name: 'None', icon: '🚫' },
-  { id: 'bubbles', name: 'Speech bubbles', icon: '💬', draw: drawBubbles },
-  { id: 'disguise', name: 'Glasses', icon: '🤓', draw: drawDisguise },
-  { id: 'crown', name: 'Crown', icon: '👑', draw: drawCrown },
-  { id: 'party', name: 'Party', icon: '🎉', draw: drawParty },
-  { id: 'love', name: 'Hearts', icon: '😍', draw: drawLove },
+  { id: 'bubbles', name: 'Speech bubbles', icon: '💬', cue: 'Say something!', draw: drawBubbles },
+  { id: 'disguise', name: 'Glasses', icon: '🤓', cue: 'Glasses on!', draw: drawDisguise },
+  { id: 'crown', name: 'Crown', icon: '👑', cue: 'Crown time!', draw: drawCrown },
+  { id: 'party', name: 'Party', icon: '🎉', cue: 'Party pose!', draw: drawParty },
+  { id: 'love', name: 'Hearts', icon: '😍', cue: 'Show the love!', draw: drawLove },
   { id: 'mix', name: 'Mix', icon: '🔀' },
 ];
 
-const MIX = ['bubbles', 'disguise', 'party', 'crown'];
+const MIX_POOL = ['bubbles', 'disguise', 'crown', 'party', 'love'];
 
-// The set used for a given Photo of a Turn (0–3). "Mix" changes it on every Photo.
-export function setForShot(setId, shot) {
-  return setId === 'mix' ? MIX[shot % MIX.length] : setId;
+// A random order of different sets for one Turn's four Photos, so every group gets a surprise.
+export function shuffleMix() {
+  const pool = [...MIX_POOL];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
+
+// The prop set used for a given Photo of a Turn (0–3). "Mix" changes it on every Photo.
+export function propForShot({ set = 'none', mixOrder = MIX_POOL }, shot) {
+  const id = set === 'mix' ? mixOrder[shot % mixOrder.length] : set;
+  return PROP_SETS.find((p) => p.id === id);
 }
 
 // Draws the props for one Photo onto ctx, covering a width×height area.
 // `phrases` are the speech bubble lines; `font` is a CSS font family for them.
-export function drawProps(ctx, width, height, { set = 'none', phrases = DEFAULT_PHRASES, font = 'sans-serif' }, shot = 0) {
-  const prop = PROP_SETS.find((p) => p.id === setForShot(set, shot));
+export function drawProps(ctx, width, height, settings, shot = 0) {
+  const { phrases = DEFAULT_PHRASES, font = 'sans-serif' } = settings;
+  const prop = propForShot(settings, shot);
   if (!prop?.draw) return;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0); // the Photo may have been drawn mirrored; props never are
@@ -50,52 +63,102 @@ function emoji(ctx, char, x, y, size, angle = 0) {
   ctx.restore();
 }
 
-// A white speech bubble with a tail pointing down towards `tailX` (a fraction of the bubble's width).
-function bubble(ctx, text, cx, cy, maxW, { font, tailX = 0.5, w }) {
-  let size = w * 0.07;
-  ctx.font = `700 ${size}px ${font}`;
-  const textW = ctx.measureText(text).width;
-  if (textW > maxW - size) {
-    size *= (maxW - size) / textW; // shrink long phrases to fit
-    ctx.font = `700 ${size}px ${font}`;
+// Splits a phrase over two lines if it's too wide for one.
+function wrap(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return [text];
+  const words = text.split(' ');
+  if (words.length < 2) return [text];
+  let best = [text];
+  let bestWidth = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const lines = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    if (widest < bestWidth) [best, bestWidth] = [lines, widest];
   }
-  const bw = Math.min(maxW, ctx.measureText(text).width + size * 1.4);
-  const bh = size * 2;
-  const x = cx - bw / 2;
-  const y = cy - bh / 2;
-  const r = bh / 2;
-  const line = Math.max(2, w * 0.006);
-  const tx = x + bw * tailX;
+  return best;
+}
 
-  ctx.beginPath();
-  ctx.roundRect(x, y, bw, bh, r);
-  ctx.moveTo(tx - bh * 0.25, y + bh - line);
-  ctx.lineTo(tx + (tailX < 0.5 ? -1 : 1) * bh * 0.15, y + bh + bh * 0.55);
-  ctx.lineTo(tx + bh * 0.25, y + bh - line);
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = '#111111';
-  ctx.lineWidth = line;
+// A comic-style speech bubble: a white oval with a curved tail pointing at (tipX, tipY),
+// a bold outline and a solid drop shadow.
+function bubble(ctx, text, cx, cy, { font, w, maxWidth, tipX, tipY }) {
+  let size = w * 0.06;
+  const setFont = () => (ctx.font = `700 ${size}px ${font}`);
+  setFont();
+  let lines = wrap(ctx, text, maxWidth);
+  let widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+  if (widest > maxWidth) {
+    size *= maxWidth / widest; // still too long: shrink to fit
+    setFont();
+    widest = maxWidth;
+  }
+  const lineHeight = size * 1.15;
+  const textHeight = lines.length * lineHeight;
+  const rx = (widest / 2) * 1.22 + size * 0.7;
+  const ry = (textHeight / 2) * 1.45 + size * 0.6;
+
+  // Tail: leaves the oval on the side facing the tip, curving slightly.
+  const angle = Math.atan2((tipY - cy) / ry, (tipX - cx) / rx);
+  const spread = 0.28;
+  const edge = (a) => [cx + rx * Math.cos(a), cy + ry * Math.sin(a)];
+  const [ax, ay] = edge(angle - spread);
+  const [bx, by] = edge(angle + spread);
+  const bend = (tipX < cx ? -1 : 1) * rx * 0.15;
+  const tail = (dx = 0, dy = 0) => {
+    ctx.moveTo(ax + dx, ay + dy);
+    ctx.quadraticCurveTo((ax + tipX) / 2 + bend + dx, (ay + tipY) / 2 + dy, tipX + dx, tipY + dy);
+    ctx.quadraticCurveTo((bx + tipX) / 2 + bend * 0.4 + dx, (by + tipY) / 2 + dy, bx + dx, by + dy);
+    ctx.closePath();
+  };
+  const oval = (dx = 0, dy = 0) => {
+    ctx.moveTo(cx + rx + dx, cy + dy);
+    ctx.ellipse(cx + dx, cy + dy, rx, ry, 0, 0, Math.PI * 2);
+  };
+
+  const line = w * 0.007;
+  const shadow = w * 0.009;
   ctx.lineJoin = 'round';
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.beginPath();
+  oval(shadow, shadow);
+  tail(shadow, shadow);
+  ctx.fill('nonzero');
+
+  // Outline both shapes, then fill both: the fill covers the outline where they overlap,
+  // so the tail joins the oval without a seam.
+  ctx.strokeStyle = '#111111';
+  ctx.lineWidth = line * 2;
+  ctx.beginPath();
+  oval();
+  tail();
   ctx.stroke();
-  ctx.fill(); // over the stroke's inner half, which also hides the join between bubble and tail
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  oval();
+  ctx.fill();
+  ctx.beginPath();
+  tail();
+  ctx.fill();
 
   ctx.fillStyle = '#111111';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, cx, cy + size * 0.05);
+  lines.forEach((l, i) => ctx.fillText(l, cx, cy - textHeight / 2 + lineHeight * (i + 0.5) + size * 0.04));
 }
 
 function drawBubbles(ctx, w, h, { phrases, font, shot }) {
   const first = phrases[(shot * 2) % phrases.length];
   const second = phrases[(shot * 2 + 1) % phrases.length];
-  bubble(ctx, first, w * 0.29, h * 0.1, w * 0.5, { font, tailX: 0.7, w });
-  if (second !== first) bubble(ctx, second, w * 0.71, h * 0.2, w * 0.5, { font, tailX: 0.3, w });
+  const maxWidth = w * 0.34;
+  bubble(ctx, first, w * 0.29, h * 0.11, { font, w, maxWidth, tipX: w * 0.36, tipY: h * 0.25 });
+  if (second !== first) bubble(ctx, second, w * 0.71, h * 0.25, { font, w, maxWidth, tipX: w * 0.62, tipY: h * 0.37 });
 }
 
 function moustache(ctx, cx, cy, width) {
   const s = width / 2;
   ctx.save();
   ctx.translate(cx, cy);
+  ctx.scale(1, -1); // drawn as an arch; flipped so the tips curl upwards
   ctx.fillStyle = '#2b1a10';
   ctx.beginPath();
   ctx.moveTo(0, -s * 0.12);

@@ -1,7 +1,7 @@
 import { startCamera, capturePhoto } from './camera.js';
 import { composeGrid, previewGrid, canvasToBlob, FONTS, fontById, loadFonts } from './grid.js';
 import { PATTERNS, drawBackground } from './backgrounds.js';
-import { PROP_SETS, DEFAULT_PHRASES, drawProps } from './props.js';
+import { PROP_SETS, DEFAULT_PHRASES, drawProps, propForShot, shuffleMix } from './props.js';
 import { setupGallery, openGallery, closeGallery, galleryOpen } from './gallery.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
@@ -10,7 +10,8 @@ import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './
 const CONFIG = {
   photosPerTurn: 4,
   countdownSeconds: 3,
-  pauseBetweenPhotosMs: 1500,
+  pauseBetweenPhotosMs: 1000,
+  propRevealMs: 2000, // time to get into position when new props appear, before the countdown
   hostHoldMs: 3000,
   photo: { width: 900, height: 1200 }, // 3:4 portrait
   grid: { gap: 30, border: 60, background: '#ffffff', jpegQuality: 0.9 },
@@ -52,6 +53,7 @@ const els = {
   colour: $('colour'),
   stylePreview: $('style-preview'),
   propsOverlay: $('props-overlay'),
+  propCue: $('prop-cue'),
   guestProps: $('guest-props'),
   propSets: $('prop-sets'),
   phrases: $('phrases'),
@@ -165,7 +167,7 @@ async function onStart() {
   try {
     const photos = [];
     for (let i = 0; i < CONFIG.photosPerTurn; i++) {
-      drawOverlay(i);
+      await revealProps(i);
       await countdown(CONFIG.countdownSeconds);
       const photo = capturePhoto(els.preview, { ...CONFIG.photo, mirror: mirrored() });
       drawProps(photo.getContext('2d'), photo.width, photo.height, propsForTurn(), i);
@@ -197,6 +199,7 @@ async function onStart() {
   } catch (err) {
     console.error(err);
     els.countdown.textContent = '';
+    els.propCue.hidden = true;
     setState('idle');
     showMessage('Something went wrong — tap Start to try again.', { timeoutMs: 5000 });
   }
@@ -230,6 +233,7 @@ function showReview(file, saved) {
 function endReview() {
   if (state !== 'review') return;
   guestPick = null; // the next group starts from the Host's choice
+  mixOrder = shuffleMix(); // and gets a new surprise order
   renderGuestProps();
   drawOverlay(0);
   els.result.hidden = true;
@@ -350,6 +354,7 @@ function renderStyle() {
 // ---------- Props ----------
 
 let guestPick = null; // a set chosen on the start screen for this Turn only
+let mixOrder = shuffleMix(); // the order of props for the next Turn when "Mix" is chosen
 
 function propSettings() {
   let saved = {};
@@ -358,7 +363,7 @@ function propSettings() {
   } catch {
     /* use the defaults */
   }
-  return { set: 'none', phrases: DEFAULT_PHRASES, guestChoice: false, ...saved };
+  return { set: 'mix', phrases: DEFAULT_PHRASES, guestChoice: false, ...saved };
 }
 
 function savePropSettings(changes) {
@@ -373,7 +378,7 @@ function savePropSettings(changes) {
 // What this Turn uses: the guest's pick if they made one, else the Host's choice.
 function propsForTurn() {
   const s = propSettings();
-  return { set: guestPick ?? s.set, phrases: s.phrases, font: fontById(gridStyle().font).family };
+  return { set: guestPick ?? s.set, mixOrder, phrases: s.phrases, font: fontById(gridStyle().font).family };
 }
 
 // The overlay canvas covers the camera preview exactly (both are 3:4), so props drawn
@@ -391,6 +396,25 @@ function drawOverlay(shot = 0) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, w, h);
   drawProps(ctx, w, h, propsForTurn(), shot);
+}
+
+// Before each Photo: if the props change, pop the new ones in and announce them,
+// then give guests a moment to line up before the countdown starts.
+async function revealProps(shot) {
+  const settings = propsForTurn();
+  const prop = propForShot(settings, shot);
+  const changed = shot === 0 || prop?.id !== propForShot(settings, shot - 1)?.id;
+  drawOverlay(shot);
+  if (!prop?.draw || !changed) return;
+  els.propCue.textContent = `${prop.icon} ${prop.cue}`;
+  els.propCue.hidden = false;
+  [els.propsOverlay, els.propCue].forEach((el) => {
+    el.classList.remove('pop');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('pop');
+  });
+  await sleep(CONFIG.propRevealMs);
+  els.propCue.hidden = true;
 }
 
 function propButtons(container, onPick) {
