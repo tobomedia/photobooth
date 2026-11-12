@@ -25,6 +25,7 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 | Who | What |
 | --- | --- |
 | Guest | Tap **Start** → 4 countdowns → Grid stays on screen until **Done** → back to Start. |
+| Guest or Host | Tap **▦ Grids** (bottom right) to see every Grid taken so far, newest first. Tap one to see it full size. Closes itself after a minute of no touches. |
 | Host | **Press and hold the top-left corner for 3 seconds** to open the Host panel. |
 
 **Host panel**

@@ -1,6 +1,7 @@
 import { startCamera, capturePhoto } from './camera.js';
 import { composeGrid, previewGrid, canvasToBlob, FONTS, loadFonts } from './grid.js';
 import { PATTERNS, drawBackground } from './backgrounds.js';
+import { setupGallery, openGallery, closeGallery, galleryOpen } from './gallery.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
 
@@ -146,7 +147,7 @@ function renderCameraChoice() {
 // ---------- Turn ----------
 
 async function onStart() {
-  if (state !== 'idle') return;
+  if (state !== 'idle' || galleryOpen()) return;
   goFullscreen();
   keepAwake();
   hideMessage();
@@ -410,6 +411,7 @@ let unexportedCount = 0;
 
 async function openHost() {
   endReview();
+  closeGallery();
   els.printToggle.checked = printEnabled();
   els.backupToggle.checked = backupEnabled();
   els.host.hidden = false;
@@ -532,6 +534,10 @@ function registerServiceWorker() {
 els.start.addEventListener('click', onStart);
 els.done.addEventListener('click', endReview);
 els.messageClose.addEventListener('click', hideMessage);
+document.getElementById('gallery-open').addEventListener('click', () => {
+  if (state === 'idle') openGallery().catch((err) => showMessage(`Couldn't open the Grids: ${err.message}`, { timeoutMs: 5000 }));
+});
+setupGallery();
 els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();

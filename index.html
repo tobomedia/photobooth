@@ -38,6 +38,24 @@
     </div>
   </main>
 
+  <button id="gallery-open" class="secondary small" aria-label="See the Grids taken so far">▦ Grids</button>
+
+  <section id="gallery" hidden aria-label="Grids taken so far">
+    <header>
+      <h2 id="gallery-count"></h2>
+      <button id="gallery-close" class="secondary small">Close</button>
+    </header>
+    <div id="gallery-list"></div>
+    <div id="viewer" hidden>
+      <img id="viewer-img" alt="Grid">
+      <div class="viewer-controls">
+        <button id="viewer-prev" class="secondary small" aria-label="Newer">‹</button>
+        <button id="viewer-close" class="small">Back</button>
+        <button id="viewer-next" class="secondary small" aria-label="Older">›</button>
+      </div>
+    </div>
+  </section>
+
   <!-- Press and hold for a few seconds to open the Host panel -->
   <div id="host-hotspot" aria-hidden="true"></div>
 
