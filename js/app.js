@@ -1,5 +1,5 @@
 import { startCamera, listCameras, capturePhoto } from './camera.js';
-import { composeGrid, previewGrid, canvasToBlob } from './grid.js';
+import { composeGrid, previewGrid, canvasToBlob, FONTS, loadFonts } from './grid.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
 
@@ -43,6 +43,7 @@ const els = {
   caption: $('caption'),
   dateToggle: $('date-toggle'),
   swatches: $('swatches'),
+  fonts: $('fonts'),
   colour: $('colour'),
   stylePreview: $('style-preview'),
   clear: $('clear'),
@@ -133,6 +134,7 @@ async function onStart() {
       if (i < CONFIG.photosPerTurn - 1) await sleep(CONFIG.pauseBetweenPhotosMs);
     }
 
+    await loadFonts();
     const canvas = composeGrid(photos, gridStyle());
     const blob = await canvasToBlob(canvas, CONFIG.grid.jpegQuality);
     photos.forEach((p) => (p.width = 0)); // free canvas memory on small devices
@@ -221,13 +223,13 @@ function gridStyle() {
   } catch {
     /* use the defaults */
   }
-  return { caption: '', showDate: false, ...CONFIG.grid, ...saved };
+  return { caption: '', showDate: false, font: 'system', ...CONFIG.grid, ...saved };
 }
 
 function saveGridStyle(changes) {
-  const { caption, showDate, background } = { ...gridStyle(), ...changes };
+  const { caption, showDate, background, font } = { ...gridStyle(), ...changes };
   try {
-    localStorage.setItem(STYLE_KEY, JSON.stringify({ caption, showDate, background }));
+    localStorage.setItem(STYLE_KEY, JSON.stringify({ caption, showDate, background, font }));
   } catch {
     showMessage('Could not save the Grid style on this device.', { timeoutMs: 4000 });
   }
@@ -247,6 +249,19 @@ function setupStyle() {
       return b;
     }),
   );
+  els.fonts.replaceChildren(
+    ...FONTS.map((f) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'font-choice';
+      b.textContent = f.name;
+      b.style.fontFamily = f.family;
+      b.style.fontWeight = f.weight;
+      b.dataset.font = f.id;
+      b.addEventListener('click', () => saveGridStyle({ font: f.id }));
+      return b;
+    }),
+  );
   els.colour.addEventListener('input', () => saveGridStyle({ background: els.colour.value }));
   els.caption.addEventListener('input', () => saveGridStyle({ caption: els.caption.value }));
   els.dateToggle.addEventListener('change', () => saveGridStyle({ showDate: els.dateToggle.checked }));
@@ -258,6 +273,7 @@ function renderStyle() {
   els.dateToggle.checked = style.showDate;
   els.colour.value = style.background;
   els.swatches.querySelectorAll('.swatch').forEach((b) => b.classList.toggle('selected', b.dataset.colour === style.background));
+  els.fonts.querySelectorAll('.font-choice').forEach((b) => b.classList.toggle('selected', b.dataset.font === style.font));
   const canvas = previewGrid(style);
   const ctx = els.stylePreview.getContext('2d');
   els.stylePreview.width = canvas.width;
@@ -353,6 +369,8 @@ async function openHost() {
 }
 
 async function renderCameras() {
+  els.cameraSelect.replaceChildren(new Option('Looking for cameras…', ''));
+  els.cameraSelect.disabled = true;
   let cameras = [];
   try {
     cameras = await listCameras();
@@ -484,6 +502,7 @@ els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();
 setupStyle();
+loadFonts().then(() => !els.host.hidden && renderStyle());
 registerServiceWorker();
 keepAwake();
 navigator.storage?.persist?.().catch(() => {});

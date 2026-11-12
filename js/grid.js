@@ -1,6 +1,36 @@
 // Compose four Photos into one 2×2 Grid image, with an optional caption band underneath.
 
-const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const SYSTEM = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+// Fonts for the caption. Files live in /fonts so they work offline. `scale` evens out
+// how big each font looks at the same pixel size.
+export const FONTS = [
+  { id: 'system', name: 'Clean', family: SYSTEM, weight: 700, scale: 1 },
+  { id: 'pacifico', name: 'Pacifico', family: 'Pacifico', file: 'fonts/pacifico.woff2', weight: 400, scale: 1 },
+  { id: 'dancing', name: 'Dancing', family: 'Dancing Script', file: 'fonts/dancingscript.woff2', weight: 700, scale: 1.15 },
+  { id: 'caveat', name: 'Caveat', family: 'Caveat', file: 'fonts/caveat.woff2', weight: 700, scale: 1.25 },
+  { id: 'playfair', name: 'Playfair', family: 'Playfair Display', file: 'fonts/playfairdisplay.woff2', weight: 700, scale: 1 },
+  { id: 'bebas', name: 'Bebas Neue', family: 'Bebas Neue', file: 'fonts/bebasneue.woff2', weight: 400, scale: 1.3 },
+];
+
+const fontById = (id) => FONTS.find((f) => f.id === id) ?? FONTS[0];
+
+// Canvas text silently falls back to another font if the chosen one hasn't loaded,
+// so this must finish before a Grid is drawn.
+let fontsReady;
+export function loadFonts() {
+  fontsReady ??= Promise.all(
+    FONTS.filter((f) => f.file).map(async (f) => {
+      try {
+        const face = new FontFace(f.family, `url(${f.file})`, { weight: String(f.weight) });
+        document.fonts.add(await face.load());
+      } catch (err) {
+        console.warn(`Font ${f.name} unavailable`, err);
+      }
+    }),
+  );
+  return fontsReady;
+}
 
 // Black or white, whichever reads better on the given #rrggbb background.
 export function textColourFor(background) {
@@ -9,12 +39,14 @@ export function textColourFor(background) {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#111111' : '#ffffff';
 }
 
-function captionLines({ caption = '', showDate = false }, date) {
+function captionLines({ caption = '', showDate = false, font }, date) {
+  const f = fontById(font);
   const lines = [];
-  if (caption.trim()) lines.push({ text: caption.trim(), size: 0.11, weight: 700 });
+  if (caption.trim()) lines.push({ text: caption.trim(), size: 0.11 * f.scale, font: `${f.weight} SIZEpx ${f.file ? `"${f.family}"` : f.family}` });
   if (showDate) {
     const text = date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-    lines.push({ text, size: 0.06, weight: 400 });
+    // The date stays in a plain font: script fonts get hard to read that small.
+    lines.push({ text, size: 0.06, font: `400 SIZEpx ${SYSTEM}` });
   }
   return lines;
 }
@@ -25,11 +57,11 @@ function bandHeight(lines, pw) {
   return Math.round(pw * (0.12 + lines.reduce((h, l) => h + l.size * 1.3, 0)));
 }
 
-export function composeGrid(photos, { gap, border, background, caption, showDate }, date = new Date()) {
+export function composeGrid(photos, { gap, border, background, caption, showDate, font }, date = new Date()) {
   if (photos.length !== 4) throw new Error(`a Grid needs 4 Photos, got ${photos.length}`);
   const pw = photos[0].width;
   const ph = photos[0].height;
-  const lines = captionLines({ caption, showDate }, date);
+  const lines = captionLines({ caption, showDate, font }, date);
   const band = bandHeight(lines, pw);
   const width = border * 2 + pw * 2 + gap;
   const height = border * 2 + ph * 2 + gap + band;
@@ -58,7 +90,7 @@ export function composeGrid(photos, { gap, border, background, caption, showDate
     for (const line of lines) {
       const px = line.size * pw;
       y += (px * 1.3) / 2;
-      ctx.font = `${line.weight} ${px}px ${FONT}`;
+      ctx.font = line.font.replace('SIZE', px);
       ctx.fillText(line.text, width / 2, y, maxWidth); // squeezes long captions to fit
       y += (px * 1.3) / 2;
     }
