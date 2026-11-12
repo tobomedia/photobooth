@@ -68,6 +68,7 @@ button.danger { background: var(--danger); }
   object-fit: cover;
   transform: scaleX(-1); /* mirrored, matching the saved Photos */
 }
+#preview.unmirrored { transform: none; } /* back cameras */
 
 #countdown {
   position: absolute;
@@ -163,6 +164,7 @@ body[data-state="review"] #review-controls { display: flex; }
 .host-card button { font-size: 1.1rem; padding: 14px 22px; width: 100%; margin-top: 8px; }
 .host-card button.small { width: auto; margin-top: 0; }
 .host-card .note { color: #666; font-size: 0.9rem; }
+#camera-select { width: 100%; font: inherit; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid #ccc; background: #fff; color: var(--card-fg); }
 .toggle { display: flex; gap: 12px; align-items: center; font-size: 1.05rem; }
 .toggle input { width: 26px; height: 26px; }
 

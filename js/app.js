@@ -1,4 +1,4 @@
-import { startCamera, capturePhoto } from './camera.js';
+import { startCamera, listCameras, capturePhoto } from './camera.js';
 import { composeGrid, canvasToBlob } from './grid.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
@@ -10,13 +10,13 @@ const CONFIG = {
   pauseBetweenPhotosMs: 1500,
   hostHoldMs: 3000,
   photo: { width: 900, height: 1200 }, // 3:4 portrait
-  mirror: true,
   grid: { gap: 30, border: 60, background: '#ffffff', jpegQuality: 0.9 },
   shareBatchSize: 30,
 };
 
 const PRINT_KEY = 'photobooth.printEnabled';
 const BACKUP_KEY = 'photobooth.backupEnabled';
+const CAMERA_KEY = 'photobooth.cameraId';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -26,7 +26,6 @@ const els = {
   result: $('result'),
   dots: [...document.querySelectorAll('#progress .dot')],
   start: $('start'),
-  save: $('save'),
   print: $('print'),
   done: $('done'),
   saveWarning: $('save-warning'),
@@ -39,6 +38,7 @@ const els = {
   zip: $('zip'),
   printToggle: $('print-toggle'),
   backupToggle: $('backup-toggle'),
+  cameraSelect: $('camera-select'),
   clear: $('clear'),
   message: $('message'),
   messageText: $('message-text'),
@@ -48,7 +48,7 @@ const els = {
 
 let state = 'idle'; // idle | turn | review
 let reviewUrl = null;
-let reviewFile = null; // the Grid on screen, ready for the Save button
+let camera = { deviceId: null, facingMode: null }; // the camera in use
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -74,9 +74,30 @@ function hideMessage() {
 
 // ---------- Camera ----------
 
-async function initCamera() {
+// Front cameras are mirrored, like a mirror; back cameras are not.
+const mirrored = () => camera.facingMode !== 'environment';
+
+function chosenCameraId() {
   try {
-    await startCamera(els.preview);
+    return localStorage.getItem(CAMERA_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function initCamera() {
+  els.start.disabled = true;
+  try {
+    const chosen = chosenCameraId();
+    try {
+      camera = await startCamera(els.preview, chosen);
+    } catch (err) {
+      if (!chosen || !['OverconstrainedError', 'NotFoundError', 'NotReadableError'].includes(err.name)) throw err;
+      // The chosen camera has gone (unplugged, or the browser reset its ids): use the default one.
+      console.warn('Chosen camera unavailable, using the default', err);
+      camera = await startCamera(els.preview);
+    }
+    els.preview.classList.toggle('unmirrored', !mirrored());
     hideMessage();
     els.start.disabled = false;
   } catch (err) {
@@ -100,7 +121,7 @@ async function onStart() {
     const photos = [];
     for (let i = 0; i < CONFIG.photosPerTurn; i++) {
       await countdown(CONFIG.countdownSeconds);
-      photos.push(capturePhoto(els.preview, { ...CONFIG.photo, mirror: CONFIG.mirror }));
+      photos.push(capturePhoto(els.preview, { ...CONFIG.photo, mirror: mirrored() }));
       flash();
       els.dots[i].classList.add('taken');
       if (i < CONFIG.photosPerTurn - 1) await sleep(CONFIG.pauseBetweenPhotosMs);
@@ -149,7 +170,6 @@ function flash() {
 // ---------- Review ----------
 
 function showReview(file, saved) {
-  reviewFile = file;
   reviewUrl = URL.createObjectURL(file);
   els.result.src = reviewUrl;
   els.result.hidden = false;
@@ -165,29 +185,8 @@ function endReview() {
   els.printSheet.replaceChildren();
   if (reviewUrl) URL.revokeObjectURL(reviewUrl);
   reviewUrl = null;
-  reviewFile = null;
   els.saveWarning.hidden = true;
   setState('idle');
-}
-
-// ---------- Saving ----------
-
-// Opens the share sheet with just this Grid (iPhone: "Save Image" puts it in
-// Photos; AirDrop sends it to a guest's phone). Falls back to a download where
-// the browser can't share files. No awaits before share(): the browser only
-// allows it straight after a tap.
-async function onSave() {
-  if (!reviewFile) return;
-  if (!canShareFiles()) {
-    downloadFile(reviewFile);
-    return;
-  }
-  try {
-    await shareFiles([reviewFile]);
-  } catch (err) {
-    console.error(err);
-    downloadFile(reviewFile);
-  }
 }
 
 // ---------- Backup ----------
@@ -267,6 +266,15 @@ function setupHost() {
       showMessage('Could not save the backup setting on this device.', { timeoutMs: 4000 });
     }
   });
+  els.cameraSelect.addEventListener('change', async () => {
+    try {
+      localStorage.setItem(CAMERA_KEY, els.cameraSelect.value);
+    } catch {
+      showMessage('Could not save the camera setting on this device.', { timeoutMs: 4000 });
+    }
+    await initCamera();
+    await renderCameras();
+  });
   els.zip.addEventListener('click', onZip);
   els.clear.addEventListener('click', onClear);
 }
@@ -278,7 +286,21 @@ async function openHost() {
   els.printToggle.checked = printEnabled();
   els.backupToggle.checked = backupEnabled();
   els.host.hidden = false;
-  await renderHost();
+  await Promise.all([renderHost(), renderCameras()]);
+}
+
+async function renderCameras() {
+  let cameras = [];
+  try {
+    cameras = await listCameras();
+  } catch (err) {
+    console.error(err);
+  }
+  const options = cameras.map(({ deviceId, label }) => new Option(label, deviceId));
+  if (!options.length) options.push(new Option('No camera found', ''));
+  els.cameraSelect.replaceChildren(...options);
+  els.cameraSelect.value = camera.deviceId ?? '';
+  els.cameraSelect.disabled = cameras.length < 2;
 }
 
 async function renderHost() {
@@ -394,7 +416,6 @@ function registerServiceWorker() {
 
 els.start.addEventListener('click', onStart);
 els.done.addEventListener('click', endReview);
-els.save.addEventListener('click', onSave);
 els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();

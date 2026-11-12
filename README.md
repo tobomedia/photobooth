@@ -24,13 +24,14 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 
 | Who | What |
 | --- | --- |
-| Guest | Tap **Start** → 4 countdowns → Grid stays on screen until **Done** → back to Start. **Save** opens the share sheet for that one Grid (Save Image / AirDrop); falls back to a download. |
+| Guest | Tap **Start** → 4 countdowns → Grid stays on screen until **Done** → back to Start. |
 | Host | **Press and hold the top-left corner for 3 seconds** to open the Host panel. |
 
 **Host panel**
 
 - **Share Grids 1–30, 31–60, …** — opens the share sheet; pick Google Photos (or "Save Images"). Done in batches because some phones limit how many files one share can carry. A ✓ marks batches already shared.
 - **Download all as zip** — fallback if sharing doesn't work.
+- **Camera** — which camera the booth uses (front, back, or a plugged-in USB camera). Remembered on the device. Front cameras are mirrored; back cameras aren't.
 - **Backup** — when on (default on Android/desktop, off on iPhone), each Grid is also downloaded to the device's Downloads folder as it's taken, so a copy survives even if the browser's storage is cleared. On Android it shows up in Google Photos / Gallery.
 - **Printing** — when on, a **Print** button appears after each Turn and prints 4 copies of the Grid on one A4 portrait sheet with cut lines. Someone has to tap through the phone's print dialog.
 - **Clear & start new Event** — deletes every Grid on the device. Needs a second tap, and warns if anything hasn't been exported.
