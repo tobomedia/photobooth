@@ -1,4 +1,4 @@
-import { startCamera, listCameras, capturePhoto } from './camera.js';
+import { startCamera, capturePhoto } from './camera.js';
 import { composeGrid, previewGrid, canvasToBlob, FONTS, loadFonts } from './grid.js';
 import { PATTERNS, drawBackground } from './backgrounds.js';
 import * as store from './store.js';
@@ -17,9 +17,8 @@ const CONFIG = {
 
 const PRINT_KEY = 'photobooth.printEnabled';
 const BACKUP_KEY = 'photobooth.backupEnabled';
-const CAMERA_KEY = 'photobooth.cameraId';
+const CAMERA_KEY = 'photobooth.cameraFacing'; // 'user' (front, default) or 'environment' (back)
 const STYLE_KEY = 'photobooth.gridStyle';
-const SWITCHED_KEY = 'photobooth.cameraSwitched';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -41,7 +40,7 @@ const els = {
   zip: $('zip'),
   printToggle: $('print-toggle'),
   backupToggle: $('backup-toggle'),
-  cameraSelect: $('camera-select'),
+  cameraButtons: [...document.querySelectorAll('#camera-choice button')],
   caption: $('caption'),
   dateToggle: $('date-toggle'),
   swatches: $('swatches'),
@@ -59,7 +58,7 @@ const els = {
 
 let state = 'idle'; // idle | turn | review
 let reviewUrl = null;
-let camera = { deviceId: null, facingMode: null }; // the camera in use
+let facing = 'user'; // the camera in use: 'user' (front) or 'environment' (back)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -87,49 +86,61 @@ function hideMessage() {
 // ---------- Camera ----------
 
 // Front cameras are mirrored, like a mirror; back cameras are not.
-const mirrored = () => camera.facingMode !== 'environment';
+const mirrored = () => facing !== 'environment';
 
-function chosenCameraId() {
+function chosenFacing() {
   try {
-    return localStorage.getItem(CAMERA_KEY);
+    localStorage.removeItem('photobooth.cameraId'); // the old camera list setting: start on the front camera
+    return localStorage.getItem(CAMERA_KEY) === 'environment' ? 'environment' : 'user';
   } catch {
-    return null;
+    return 'user';
   }
 }
 
-// `switching` is true when the Host has just picked a camera, so a failure is shown, not hidden.
-async function initCamera() {
-  els.start.disabled = true;
-  let switching = false;
+function saveFacing(value) {
   try {
-    switching = sessionStorage.getItem(SWITCHED_KEY) === '1';
-    sessionStorage.removeItem(SWITCHED_KEY);
+    localStorage.setItem(CAMERA_KEY, value);
   } catch {
-    /* not important */
+    showMessage('Could not save the camera setting on this device.', { timeoutMs: 4000 });
   }
+}
+
+// `switching` is true when the Host has just tapped Front/Back, so a failure stays on screen.
+async function initCamera({ switching = false } = {}) {
+  els.start.disabled = true;
+  els.cameraButtons.forEach((b) => (b.disabled = true));
   try {
-    const chosen = chosenCameraId();
-    let fallbackNote = null;
+    const chosen = chosenFacing();
     try {
-      camera = await startCamera(els.preview, chosen);
+      facing = await startCamera(els.preview, chosen);
     } catch (err) {
-      if (!chosen || err.name === 'NotAllowedError') throw err;
-      // The chosen camera wouldn't start (unplugged, busy, or the browser reset its ids): use the default one.
-      console.warn('Chosen camera unavailable, using the default', err);
-      const name = (await listCameras().catch(() => [])).find((c) => c.deviceId === chosen)?.label || 'that camera';
-      fallbackNote = `Couldn't start ${name} even after a fresh start (${err.name}: ${err.message}), so the front camera is being used.`;
-      camera = await startCamera(els.preview);
+      if (chosen === 'user' || err.name === 'NotAllowedError') throw err;
+      // The back camera wouldn't start: go back to the front one, and remember that.
+      console.warn('Back camera unavailable, using the front one', err);
+      saveFacing('user');
+      facing = await startCamera(els.preview, 'user');
+      showMessage(`Couldn't start the back camera (${err.name}: ${err.message}), so the front camera is being used.`, {
+        timeoutMs: switching ? 0 : 8000,
+      });
+      return;
     }
-    els.preview.classList.toggle('unmirrored', !mirrored());
-    if (fallbackNote) showMessage(fallbackNote, { timeoutMs: switching ? 0 : 8000 });
-    else if (switching) showMessage('Camera switched.', { timeoutMs: 3000 });
+    if (switching) showMessage(`Using the ${facing === 'environment' ? 'back' : 'front'} camera.`, { timeoutMs: 3000 });
     else hideMessage();
-    els.start.disabled = false;
   } catch (err) {
     console.error(err);
-    els.start.disabled = true;
-    showMessage(`Camera unavailable: ${err.message}. Check camera permission for this site.`, { retry: initCamera });
+    showMessage(`Camera unavailable: ${err.message}. Check camera permission for this site.`, { retry: () => initCamera() });
+  } finally {
+    els.preview.classList.toggle('unmirrored', !mirrored());
+    els.start.disabled = !els.preview.srcObject;
+    renderCameraChoice();
   }
+}
+
+function renderCameraChoice() {
+  els.cameraButtons.forEach((b) => {
+    b.classList.toggle('selected', b.dataset.facing === facing);
+    b.disabled = false;
+  });
 }
 
 // ---------- Turn ----------
@@ -384,22 +395,13 @@ function setupHost() {
       showMessage('Could not save the backup setting on this device.', { timeoutMs: 4000 });
     }
   });
-  els.cameraSelect.addEventListener('change', async () => {
-    try {
-      localStorage.setItem(CAMERA_KEY, els.cameraSelect.value);
-    } catch {
-      showMessage('Could not save the camera setting on this device.', { timeoutMs: 4000 });
-    }
-    // Reload rather than switch in place: some Android tablets keep the old camera locked
-    // until the page closes, so the new one can only be opened from a fresh start.
-    els.cameraSelect.disabled = true;
-    try {
-      sessionStorage.setItem(SWITCHED_KEY, '1');
-    } catch {
-      /* only used to show a confirmation */
-    }
-    location.reload();
-  });
+  els.cameraButtons.forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.dataset.facing === facing) return;
+      saveFacing(b.dataset.facing);
+      initCamera({ switching: true });
+    }),
+  );
   els.zip.addEventListener('click', onZip);
   els.clear.addEventListener('click', onClear);
 }
@@ -412,24 +414,8 @@ async function openHost() {
   els.backupToggle.checked = backupEnabled();
   els.host.hidden = false;
   renderStyle();
-  await Promise.all([renderHost(), renderCameras()]);
-}
-
-async function renderCameras() {
-  els.cameraSelect.replaceChildren(new Option('Looking for cameras…', ''));
-  els.cameraSelect.disabled = true;
-  let cameras = [];
-  try {
-    cameras = await listCameras();
-  } catch (err) {
-    console.error(err);
-  }
-  const options = cameras.map(({ deviceId, label }) => new Option(label, deviceId));
-  const inUse = cameras.some((c) => c.deviceId === camera.deviceId);
-  if (!inUse) options.unshift(new Option(cameras.length ? 'Camera not started — pick one' : 'No camera found', '', true, true));
-  els.cameraSelect.replaceChildren(...options);
-  if (inUse) els.cameraSelect.value = camera.deviceId;
-  els.cameraSelect.disabled = cameras.length === 0 || (inUse && cameras.length < 2);
+  renderCameraChoice();
+  await renderHost();
 }
 
 async function renderHost() {

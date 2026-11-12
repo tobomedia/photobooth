@@ -2,39 +2,33 @@
 
 let currentStream = null;
 
-// Starts the chosen camera (by deviceId), or the front camera if none is chosen.
-// Resolves to { deviceId, facingMode } of the camera actually in use.
-export async function startCamera(video, deviceId = null) {
+// Starts the front ('user') or back ('environment') camera.
+export async function startCamera(video, facing = 'user') {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('this browser has no camera access (the page must be opened over https)');
   }
   stopCamera(video);
-  const stream = await openStream(deviceId);
+  const stream = await openStream(facing);
   currentStream = stream;
   video.srcObject = stream;
   await video.play();
-  const settings = stream.getVideoTracks()[0]?.getSettings() ?? {};
-  return { deviceId: settings.deviceId ?? null, facingMode: settings.facingMode ?? null };
+  return facing;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SIZE = { width: { ideal: 1920 }, height: { ideal: 1440 } };
 
-// Android often refuses to open a second camera for a moment after the first one is
-// stopped ("Could not start video source"), and some cameras reject the size request.
-// So try a few ways, with short pauses, before giving up.
-async function openStream(deviceId) {
-  if (!deviceId) return navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', ...SIZE } });
-
-  const label = (await listCameras().catch(() => [])).find((c) => c.deviceId === deviceId)?.label ?? '';
+async function openStream(facing) {
+  // Front: a preference, so laptops and webcams with no "facing" still work.
+  // Back: must really be the back camera, so a failure is reported rather than hidden.
+  // Android can refuse to open a camera for a moment after the other one is stopped
+  // ("Could not start video source"), so retry with growing pauses.
+  const want = facing === 'user' ? 'user' : { exact: 'environment' };
   const attempts = [
-    { wait: 0, video: { deviceId: { exact: deviceId }, ...SIZE } },
-    { wait: 400, video: { deviceId: { exact: deviceId }, ...SIZE } },
-    { wait: 800, video: { deviceId: { exact: deviceId } } },
+    { wait: 0, video: { facingMode: want, ...SIZE } },
+    { wait: 500, video: { facingMode: want, ...SIZE } },
+    { wait: 1500, video: { facingMode: want } },
   ];
-  // Android names cameras like "camera2 0, facing back": asking by direction sometimes works when the id doesn't.
-  if (/back|rear|environment/i.test(label)) attempts.push({ wait: 400, video: { facingMode: { exact: 'environment' }, ...SIZE } });
-
   let lastErr;
   for (const { wait, video } of attempts) {
     if (wait) await sleep(wait);
@@ -43,7 +37,7 @@ async function openStream(deviceId) {
     } catch (err) {
       console.warn('Camera attempt failed', video, err);
       lastErr = err;
-      if (err.name === 'NotAllowedError') break; // permission refused: retrying won't help
+      if (err.name === 'NotAllowedError' || err.name === 'OverconstrainedError') break; // retrying won't help
     }
   }
   throw lastErr;
@@ -55,13 +49,6 @@ export function stopCamera(video) {
   video.srcObject = null;
 }
 
-// Every camera on the device. Names are only filled in once camera permission is granted.
-export async function listCameras() {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  return devices
-    .filter((d) => d.kind === 'videoinput')
-    .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }));
-}
 
 // Grab the current video frame as one Photo: centre-cropped to the
 // requested shape (3:4 portrait) and optionally mirrored.
