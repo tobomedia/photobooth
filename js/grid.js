@@ -1,4 +1,5 @@
-// Compose four Photos into one 2×2 Grid image, with an optional caption band underneath.
+// Compose four Photos into one Grid image, with an optional caption band underneath.
+// Layouts: 'grid' (2×2, portrait Photos) or 'strip' (one column of square Photos).
 
 import { drawBackground } from './backgrounds.js';
 
@@ -59,14 +60,23 @@ function bandHeight(lines, pw) {
   return Math.round(pw * (0.12 + lines.reduce((h, l) => h + l.size * 1.3, 0)));
 }
 
-export function composeGrid(photos, { gap, border, background, pattern, caption, showDate, font }, date = new Date()) {
+export const LAYOUTS = [
+  { id: 'grid', name: '2×2 Grid', cols: 2, photo: { width: 900, height: 1200 } }, // 3:4 portrait
+  { id: 'strip', name: 'Strip', cols: 1, photo: { width: 900, height: 900 } }, // square
+];
+
+export const layoutById = (id) => LAYOUTS.find((l) => l.id === id) ?? LAYOUTS[0];
+
+export function composeGrid(photos, { gap, border, background, pattern, caption, showDate, font, layout }, date = new Date()) {
   if (photos.length !== 4) throw new Error(`a Grid needs 4 Photos, got ${photos.length}`);
+  const cols = layoutById(layout).cols;
+  const rows = Math.ceil(photos.length / cols);
   const pw = photos[0].width;
   const ph = photos[0].height;
   const lines = captionLines({ caption, showDate, font }, date);
   const band = bandHeight(lines, pw);
-  const width = border * 2 + pw * 2 + gap;
-  const height = border * 2 + ph * 2 + gap + band;
+  const width = border * 2 + pw * cols + gap * (cols - 1);
+  const height = border * 2 + ph * rows + gap * (rows - 1) + band;
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -75,7 +85,7 @@ export function composeGrid(photos, { gap, border, background, pattern, caption,
 
   // Work out where the caption goes first, so busy backgrounds can keep clear of it.
   const maxWidth = width - border * 2;
-  const top = border + ph * 2 + gap;
+  const top = border + ph * rows + gap * (rows - 1);
   const textHeight = lines.reduce((h, l) => h + l.size * 1.3 * pw, 0);
   let avoid = null;
   if (lines.length) {
@@ -89,8 +99,8 @@ export function composeGrid(photos, { gap, border, background, pattern, caption,
   drawBackground(ctx, width, height, { background, pattern }, pw / 900, avoid);
 
   photos.forEach((photo, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
+    const col = i % cols;
+    const row = Math.floor(i / cols);
     ctx.drawImage(photo, border + col * (pw + gap), border + row * (ph + gap));
   });
 
@@ -111,7 +121,9 @@ export function composeGrid(photos, { gap, border, background, pattern, caption,
 }
 
 // A small Grid with grey stand-in Photos, so the Host can see the style before a Turn.
-export function previewGrid(style, { photoWidth = 90, photoHeight = 120 } = {}) {
+export function previewGrid(style, { photoWidth = 90 } = {}) {
+  const { photo } = layoutById(style.layout);
+  const photoHeight = Math.round((photoWidth * photo.height) / photo.width);
   const photos = Array.from({ length: 4 }, (_, i) => {
     const c = document.createElement('canvas');
     c.width = photoWidth;

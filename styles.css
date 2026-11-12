@@ -62,6 +62,11 @@ button.danger { background: var(--danger); }
   border-radius: 12px;
   overflow: hidden;
 }
+/* Strip layout: square Photos, so a square camera view. */
+body[data-layout="strip"] #stage {
+  height: min(72dvh, calc(100vw - 32px));
+  aspect-ratio: 1;
+}
 
 #preview {
   width: 100%;
@@ -258,7 +263,7 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   background: #222;
   overflow: hidden;
 }
-#gallery .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#gallery .tile img { width: 100%; height: 100%; object-fit: contain; display: block; } /* strips are much taller than Grids */
 
 #viewer {
   position: absolute;
@@ -329,6 +334,9 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
 #swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .host-card button.swatch { width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 50%; border: 2px solid #ccc; }
 .host-card button.swatch.selected { outline: 3px solid var(--accent); outline-offset: 2px; }
+#layouts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.host-card button.layout-choice { margin: 0; padding: 8px 6px; font-size: 1rem; border-radius: 10px; background: #f1f1f1; color: var(--card-fg); border: 2px solid transparent; }
+.host-card button.layout-choice.selected { border-color: var(--accent); background: #fff0f3; }
 #fonts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .host-card button.font-choice { margin: 0; padding: 8px 6px; font-size: 1.05rem; border-radius: 10px; background: #f1f1f1; color: var(--card-fg); border: 2px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .host-card button.font-choice.selected { border-color: var(--accent); background: #fff0f3; }
@@ -383,7 +391,7 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   #rotate { display: grid; }
 }
 
-/* ---------- Print: 4 copies of the Grid on one A4 portrait sheet ---------- */
+/* ---------- Print: 4 copies of the Grid (or strip) on one A4 portrait sheet ---------- */
 
 #print-sheet { display: none; }
 
@@ -412,4 +420,8 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   #print-sheet .cell:nth-child(odd) { border-right: 0.3mm dashed #bbb; }
   #print-sheet .cell:nth-child(-n + 2) { border-bottom: 0.3mm dashed #bbb; }
   #print-sheet img { max-width: 100%; max-height: 100%; }
+  /* Strips: 4 side by side, full height, cut lines between them */
+  #print-sheet.strip { grid-template-columns: repeat(4, 52.5mm); grid-template-rows: 297mm; }
+  #print-sheet.strip .cell { border-bottom: none; border-right: 0.3mm dashed #bbb; padding: 5mm 4mm; }
+  #print-sheet.strip .cell:last-child { border-right-color: transparent; } /* keeps all 4 the same size */
 }
