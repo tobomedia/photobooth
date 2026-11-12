@@ -20,6 +20,11 @@
     <div id="stage">
       <video id="preview" playsinline muted autoplay></video>
       <canvas id="props-overlay" aria-hidden="true"></canvas>
+      <div id="filter-picker" hidden>
+        <button id="filter-prev" type="button" aria-label="Previous filter">‹</button>
+        <span id="filter-name" aria-live="polite"></span>
+        <button id="filter-next" type="button" aria-label="Next filter">›</button>
+      </div>
       <div id="prop-cue" aria-live="assertive" hidden></div>
       <div id="countdown" aria-live="assertive"></div>
       <div id="flash"></div>
@@ -96,6 +101,11 @@
           <div id="patterns"></div>
         </div>
       </div>
+
+      <h3>Filter</h3>
+      <p class="note">Changes the colours of the Photos. Props stay in colour.</p>
+      <div id="filter-choices"></div>
+      <label class="toggle"><input type="checkbox" id="guest-filter-toggle"> Let guests swipe the camera to change the filter</label>
 
       <h3>Props</h3>
       <p class="note">Shown over the camera so guests can line up with them, and saved in the Photos.</p>

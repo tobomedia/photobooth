@@ -4,6 +4,7 @@ import { PATTERNS, drawBackground } from './backgrounds.js';
 import { PROP_SETS, DEFAULT_PHRASES, drawProps, propForShot, shuffleMix } from './props.js';
 import { startTracking, stopTracking, trackingActive, currentFaces, averageCheckMs } from './faces.js';
 import { setupGallery, openGallery, closeGallery, galleryOpen } from './gallery.js';
+import { FILTERS, filterById, applyFilter, setupFilterPreview, showFilterPreview } from './filters.js';
 import * as store from './store.js';
 import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
 
@@ -23,6 +24,7 @@ const BACKUP_KEY = 'photobooth.backupEnabled';
 const CAMERA_KEY = 'photobooth.cameraFacing'; // 'user' (front, default) or 'environment' (back)
 const STYLE_KEY = 'photobooth.gridStyle';
 const PROPS_KEY = 'photobooth.props';
+const FILTER_KEY = 'photobooth.filter';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -54,6 +56,13 @@ const els = {
   colour: $('colour'),
   stylePreview: $('style-preview'),
   layouts: $('layouts'),
+  stage: $('stage'),
+  filterChoices: $('filter-choices'),
+  guestFilterToggle: $('guest-filter-toggle'),
+  filterPicker: $('filter-picker'),
+  filterName: $('filter-name'),
+  filterPrev: $('filter-prev'),
+  filterNext: $('filter-next'),
   propsOverlay: $('props-overlay'),
   propCue: $('prop-cue'),
   cycleProps: $('cycle-props'),
@@ -197,10 +206,12 @@ async function onStart() {
     await loadFonts(); // speech bubbles use the Grid font
     const style = gridStyle(); // fixed for the whole Turn, even if the Host changes it mid-way
     const { photo: photoSize } = layoutById(style.layout);
+    const filterId = filterForTurn();
     for (let i = 0; i < CONFIG.photosPerTurn; i++) {
       await revealProps(i);
       await countdown(CONFIG.countdownSeconds);
       const photo = capturePhoto(els.preview, { ...photoSize, mirror: mirrored() });
+      applyFilter(photo, filterId); // before the props, so they stay in colour
       drawProps(photo.getContext('2d'), photo.width, photo.height, propsForTurn(), i);
       photos.push(photo);
       flash();
@@ -242,6 +253,8 @@ async function onStart() {
     els.dots.forEach((d) => d.classList.remove('taken'));
     if (cancelled) {
       guestPick = null; // start again fresh, as after a finished Turn
+      guestFilter = null;
+      renderFilter();
       mixOrder = shuffleMix();
       renderGuestProps();
     }
@@ -284,6 +297,8 @@ function showReview(file, saved) {
 function endReview() {
   if (state !== 'review') return;
   guestPick = null; // the next group starts from the Host's choice
+  guestFilter = null;
+  renderFilter();
   mixOrder = shuffleMix(); // and gets a new surprise order
   renderGuestProps();
   drawOverlay(0);
@@ -420,6 +435,95 @@ function renderStyle() {
   els.stylePreview.width = canvas.width;
   els.stylePreview.height = canvas.height;
   ctx.drawImage(canvas, 0, 0);
+}
+
+// ---------- Filters ----------
+
+let guestFilter = null; // a filter a guest swiped to, for this Turn only
+let filterPreview = null;
+let filterCueTimer = null;
+
+function filterSettings() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+  } catch {
+    /* use the defaults */
+  }
+  return { filter: 'none', guestChoice: true, ...saved };
+}
+
+function saveFilterSettings(changes) {
+  try {
+    localStorage.setItem(FILTER_KEY, JSON.stringify({ ...filterSettings(), ...changes }));
+  } catch {
+    showMessage('Could not save the filter setting on this device.', { timeoutMs: 4000 });
+  }
+  renderFilter();
+}
+
+const filterForTurn = () => filterById(guestFilter ?? filterSettings().filter).id;
+
+// Guests swipe left/right on the camera (or tap the arrows) to try each filter.
+function stepFilter(dir) {
+  if (state !== 'idle' || !filterSettings().guestChoice) return;
+  const i = FILTERS.findIndex((f) => f.id === filterForTurn());
+  const next = FILTERS[(i + dir + FILTERS.length) % FILTERS.length];
+  guestFilter = next.id;
+  renderFilter();
+  els.propCue.textContent = `${next.icon} ${next.name}`;
+  els.propCue.hidden = false;
+  pop(els.propCue);
+  clearTimeout(cycleCueTimer);
+  clearTimeout(filterCueTimer);
+  filterCueTimer = setTimeout(() => (els.propCue.hidden = true), 1200);
+}
+
+function setupFilters() {
+  filterPreview = setupFilterPreview(els.stage, els.preview);
+  els.filterChoices.replaceChildren(
+    ...FILTERS.map((f) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'filter-choice';
+      b.dataset.filter = f.id;
+      const icon = document.createElement('span');
+      icon.className = 'prop-icon';
+      icon.textContent = f.icon;
+      const name = document.createElement('span');
+      name.textContent = f.name;
+      b.append(icon, name);
+      b.addEventListener('click', () => saveFilterSettings({ filter: f.id }));
+      return b;
+    }),
+  );
+  els.guestFilterToggle.addEventListener('change', () => saveFilterSettings({ guestChoice: els.guestFilterToggle.checked }));
+  els.filterPrev.addEventListener('click', () => stepFilter(-1));
+  els.filterNext.addEventListener('click', () => stepFilter(1));
+
+  let start = null;
+  els.stage.addEventListener('pointerdown', (e) => {
+    start = state === 'idle' ? { x: e.clientX, y: e.clientY } : null;
+  });
+  els.stage.addEventListener('pointerup', (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    start = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) stepFilter(dx < 0 ? 1 : -1);
+  });
+  els.stage.addEventListener('pointercancel', () => (start = null));
+  renderFilter();
+}
+
+function renderFilter() {
+  const s = filterSettings();
+  const current = filterById(filterForTurn());
+  showFilterPreview(filterPreview, current.id);
+  els.filterChoices.querySelectorAll('.filter-choice').forEach((b) => b.classList.toggle('selected', b.dataset.filter === s.filter));
+  els.guestFilterToggle.checked = s.guestChoice;
+  els.filterPicker.hidden = !s.guestChoice;
+  els.filterName.textContent = `${current.icon} ${current.name}`;
 }
 
 // ---------- Props ----------
@@ -839,6 +943,7 @@ els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();
 setupStyle();
+setupFilters();
 setupProps();
 applyLayout();
 loadFonts().then(() => !els.host.hidden && renderStyle());

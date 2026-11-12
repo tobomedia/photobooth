@@ -76,6 +76,37 @@ body[data-layout="strip"] #stage {
 }
 #preview.unmirrored { transform: none; } /* back cameras */
 
+/* Filters: vignette and film grain over the camera (the colour change is an SVG filter on the video). */
+#filter-vignette, #filter-grain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+#filter-grain { mix-blend-mode: overlay; image-rendering: pixelated; }
+#filter-grain[hidden] { display: none; }
+#stage { touch-action: pan-y; } /* horizontal swipes change the filter */
+
+/* Filter name with arrows, top of the camera, start screen only */
+#filter-picker {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  padding: 2px;
+  white-space: nowrap;
+}
+#filter-picker[hidden], body:not([data-state="idle"]) #filter-picker { display: none; }
+#filter-picker button { margin: 0; padding: 4px 12px; font-size: 1.4rem; line-height: 1; background: transparent; border: none; color: #fff; }
+#filter-name { font-size: 0.95rem; font-weight: 700; color: #fff; padding: 0 4px; }
+
 #props-overlay {
   position: absolute;
   inset: 0;
@@ -344,6 +375,10 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
 .host-card button.pattern-choice { margin: 0; padding: 4px 4px 6px; border-radius: 10px; background: #f1f1f1; color: var(--card-fg); border: 2px solid transparent; font-size: 0.8rem; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .host-card button.pattern-choice canvas { width: 100%; aspect-ratio: 5 / 3; border-radius: 6px; border: 1px solid #ddd; }
 .host-card button.pattern-choice.selected { border-color: var(--accent); background: #fff0f3; }
+#filter-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.host-card button.filter-choice { margin: 0; padding: 8px 6px; border-radius: 10px; background: #f1f1f1; color: var(--card-fg); border: 2px solid transparent; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.host-card button.filter-choice .prop-icon { font-size: 1.5rem; }
+.host-card button.filter-choice.selected { border-color: var(--accent); background: #fff0f3; }
 #prop-sets { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
 .host-card button.prop-choice { margin: 0; padding: 8px 6px; border-radius: 10px; background: #f1f1f1; color: var(--card-fg); border: 2px solid transparent; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .host-card button.prop-choice .prop-icon { font-size: 1.5rem; }
