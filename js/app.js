@@ -74,6 +74,9 @@ const els = {
   followFacesToggle: $('follow-faces-toggle'),
   followFacesStatus: $('follow-faces-status'),
   clear: $('clear'),
+  appVersion: $('app-version'),
+  updateNow: $('update-now'),
+  updateStatus: $('update-status'),
   message: $('message'),
   messageText: $('message-text'),
   messageRetry: $('message-retry'),
@@ -807,6 +810,7 @@ function setupHost() {
     }),
   );
   els.zip.addEventListener('click', onZip);
+  els.updateNow.addEventListener('click', forceUpdate);
   els.clear.addEventListener('click', onClear);
 }
 
@@ -821,6 +825,8 @@ async function openHost() {
   renderStyle();
   renderProps();
   renderCameraChoice();
+  appVersion().then((v) => (els.appVersion.textContent = `App version: ${v}`));
+  els.updateStatus.textContent = '';
   await renderHost();
 }
 
@@ -926,11 +932,79 @@ function goFullscreen() {
   if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
 }
 
+// Offline support. A new version is fetched in the background whenever the app is opened or
+// comes back to the screen; the booth then reloads itself the next time it's on the start screen.
+const SW_OPTIONS = { updateViaCache: 'none' }; // always check sw.js itself, not a cached copy
+let reloadPending = false;
+
 function registerServiceWorker() {
   const local = ['localhost', '127.0.0.1'].includes(location.hostname);
-  if ('serviceWorker' in navigator && !local) {
-    navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('Offline support unavailable', err));
+  if (!('serviceWorker' in navigator) || local) return;
+  let controlled = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!controlled) {
+      controlled = true; // the first install took over: this page is already the newest
+      return;
+    }
+    reloadPending = true;
+    reloadWhenQuiet();
+  });
+  navigator.serviceWorker
+    .register('./sw.js', SW_OPTIONS)
+    .then((reg) => {
+      const check = () => document.visibilityState === 'visible' && reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', check);
+      setInterval(check, 30 * 60 * 1000);
+    })
+    .catch((err) => console.warn('Offline support unavailable', err));
+}
+
+// Never in the middle of a Turn, a Grid on screen, the Host panel or the gallery.
+function reloadWhenQuiet() {
+  if (!reloadPending) return;
+  if (state === 'idle' && els.host.hidden && !galleryOpen()) location.reload();
+  else setTimeout(reloadWhenQuiet, 2000);
+}
+
+async function appVersion() {
+  try {
+    const keys = await caches.keys();
+    return keys.find((k) => k.startsWith('photobooth-'))?.replace('photobooth-', '') ?? 'not installed for offline use';
+  } catch {
+    return 'unknown';
   }
+}
+
+// Host panel "Update now": throws away the offline copy and fetches the app fresh.
+// Grids are stored separately and are kept.
+async function forceUpdate() {
+  els.updateNow.disabled = true;
+  els.updateStatus.textContent = 'Checking for internet…';
+  try {
+    await fetch('./sw.js', { cache: 'no-store' }); // don't throw away the offline copy without internet
+  } catch {
+    els.updateStatus.textContent = 'No internet: connect to Wi‑Fi and try again.';
+    els.updateNow.disabled = false;
+    return;
+  }
+  els.updateStatus.textContent = 'Downloading the latest version…';
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations()) ?? [];
+    await Promise.all(regs.map((r) => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k.startsWith('photobooth-')).map((k) => caches.delete(k)));
+    if (navigator.serviceWorker && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+      // Install afresh and wait until it has saved every file, so the reload gets the new version.
+      const reg = await navigator.serviceWorker.register('./sw.js', SW_OPTIONS);
+      const worker = reg.installing || reg.waiting || reg.active;
+      if (worker && worker.state !== 'activated') {
+        await new Promise((resolve) => worker.addEventListener('statechange', () => worker.state === 'activated' && resolve()));
+      }
+    }
+  } catch (err) {
+    console.warn('Update failed', err);
+  }
+  location.reload();
 }
 
 // ---------- Boot ----------
