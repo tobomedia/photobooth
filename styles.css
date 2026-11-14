@@ -214,9 +214,10 @@ body:not([data-state="idle"]) #guest-props { display: none; }
 #review-controls { display: none; gap: 16px; flex-wrap: wrap; justify-content: center; }
 .warning { color: #ffb4a8; margin: 0; }
 
-/* Bottom left (the Grids button is bottom right): tries the next prop set. */
+/* Bottom left (the Grids button is bottom right): shows the current props, tap for the next set. */
 #cycle-props {
   position: fixed;
+  overflow: visible;
   left: 16px;
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 4;
@@ -227,8 +228,22 @@ body:not([data-state="idle"]) #guest-props { display: none; }
   color: #ccc;
   font-size: 1.8rem;
   line-height: 1;
-  opacity: 0.85;
+  opacity: 0.95;
   -webkit-tap-highlight-color: transparent;
+}
+/* Small ↻ in the corner: the button shows the current props, and tapping cycles them. */
+#cycle-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #555;
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 22px;
+  text-align: center;
 }
 #cycle-props:active { transform: scale(0.92); }
 #cycle-icon { display: inline-block; }

@@ -25,7 +25,7 @@ export const PROP_SETS = [
   { id: 'hearteyes', name: 'Heart eyes', icon: '😍', cue: 'Heart eyes!', draw: drawHeartEyes },
   { id: 'party', name: 'Party', icon: '🎉', cue: 'Party pose!', draw: drawParty },
   { id: 'love', name: 'Hearts', icon: '💕', cue: 'Show the love!', draw: drawLove },
-  { id: 'mix', name: 'Mix', icon: '🔀' },
+  { id: 'mix', name: 'Mix', icon: '🎲' },
 ];
 
 const MIX_POOL = ['bubbles', 'disguise', 'crown', 'hats', 'ears', 'angels', 'flowers', 'hearteyes', 'party', 'love'];
