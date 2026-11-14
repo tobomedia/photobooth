@@ -729,6 +729,10 @@ function renderGuestProps() {
   els.guestProps.hidden = !s.guestChoice;
   const current = guestPick ?? s.set;
   els.guestProps.querySelectorAll('.prop-choice').forEach((b) => b.classList.toggle('selected', b.dataset.set === current));
+  // The cycle button shows the props on the camera now; its little ↻ says tap for more.
+  const set = PROP_SETS.find((p) => p.id === current) ?? PROP_SETS[0];
+  els.cycleIcon.textContent = set.icon;
+  els.cycleProps.setAttribute('aria-label', `Props: ${set.name}. Tap to try different props`);
 }
 
 // ---------- Printing ----------
