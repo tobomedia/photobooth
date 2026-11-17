@@ -8,7 +8,7 @@ Android booth ──Wi‑Fi──▶ Raspberry Pi ──USB──▶ Selphy CP75
 
 ## You need
 
-- Raspberry Pi with Wi‑Fi (Pi 3, 4, 5 or Zero 2 W) and its power supply. A Pi Zero also needs a micro‑USB OTG adapter for the printer cable.
+- Raspberry Pi with Wi‑Fi (Pi 3, 4, 5, Zero 2 W or the original Zero W; see [Pi Zero W notes](#pi-zero-w-original-notes)) and its power supply. A Pi Zero also needs a micro‑USB OTG adapter for the printer cable.
 - microSD card (8 GB or more).
 - USB A‑to‑B cable (the square "printer" plug) for the CP750's USB port, **not** the little PictBridge cable that pulls out of the printer.
 - Selphy KP‑108IN paper + ink (Postcard size, 100×148 mm).
@@ -17,13 +17,32 @@ Android booth ──Wi‑Fi──▶ Raspberry Pi ──USB──▶ Selphy CP75
 ## 1. Prepare the Pi
 
 1. On your computer, install **Raspberry Pi Imager** (raspberrypi.com/software).
-2. Choose your Pi model → **Raspberry Pi OS Lite (64‑bit)** (32‑bit for a Pi Zero / Pi 2) → your SD card.
+2. Choose your Pi model → **Raspberry Pi OS Lite (64‑bit)** → your SD card. On an original Pi Zero W pick **Raspberry Pi Zero** as the model, then **Raspberry Pi OS Lite (32‑bit)**: the 64‑bit one won't start on it.
 3. When it asks to customise settings (**Edit settings**):
    - Hostname: `photobooth-printer`
    - Username `pi` and a password you'll remember
    - Wi‑Fi: the network name and password the booth phone will use **at the party**
    - Services tab: **Enable SSH** (password authentication)
 4. Write the card, put it in the Pi, power it on, wait ~2 minutes.
+
+## Pi Zero W (original) notes
+
+The first‑generation Zero W (single‑core, 512 MB) does the job but is slow, so:
+
+- **Ports:** the Zero has two micro‑USB sockets. Power goes in the one marked **PWR** (at the end). The printer goes in the one marked **USB** (in the middle), through a micro‑USB OTG adapter (micro‑B plug to USB‑A socket) and then the USB A‑to‑B printer cable.
+- **Power:** use a proper 5 V, 2 A supply. A weak phone charger can make it drop off Wi‑Fi under load.
+- **Wi‑Fi is 2.4 GHz only.** If the party Wi‑Fi has separate 2.4 GHz and 5 GHz names, use the 2.4 GHz one for the Pi; the tablet can be on either as long as they're the same network. Guest/hotel Wi‑Fi that stops devices seeing each other won't work; use a phone hotspot or your own router instead.
+- **Setup is slow:** step 2's install can take 30–60 minutes on a Zero. Leave it running; don't unplug it.
+- **Prints are slower to start:** the Pi has to convert each Grid for the printer, which can take 1–2 minutes on a Zero before the Selphy starts (then about a minute to print). Tell guests "your print will pop out in a few minutes", and do a test before the party to see your real timing.
+- Before installing, give it more memory headroom (the Zero only has 512 MB):
+
+  ```sh
+  sudo sed -i 's/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=512/' /etc/dphys-swapfile 2>/dev/null; sudo systemctl restart dphys-swapfile 2>/dev/null; free -m
+  ```
+
+  (On newer Raspberry Pi OS versions this file may not exist; that's fine, carry on.)
+
+If it turns out too slow, a Pi Zero 2 W (about £15) is a drop‑in replacement: same cables, same steps, roughly five times faster.
 
 ## 2. Install the printer software
 
