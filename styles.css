@@ -408,6 +408,7 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
 #colour { width: 48px; height: 36px; border: 0; padding: 0; background: none; }
 .toggle { display: flex; gap: 12px; align-items: center; font-size: 1.05rem; }
 .toggle input { width: 26px; height: 26px; }
+.toggle:has(input:disabled) { opacity: 0.45; }
 
 /* ---------- Messages & orientation ---------- */
 
