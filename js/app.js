@@ -20,6 +20,8 @@ const CONFIG = {
 };
 
 const PRINT_KEY = 'photobooth.printEnabled';
+const AUTO_PRINT_KEY = 'photobooth.autoPrint'; // open the print screen by itself after each Turn
+const AUTO_PRINT_DELAY_MS = 1500; // let the guests see their Grid before the print screen covers it
 const PAPER_KEY = 'photobooth.printPaper'; // 'photo' (100×148 mm postcard, Selphy KP-108IN) or 'a4'
 const BACKUP_KEY = 'photobooth.backupEnabled';
 const CAMERA_KEY = 'photobooth.cameraFacing'; // 'user' (front, default) or 'environment' (back)
@@ -47,6 +49,7 @@ const els = {
   shareNote: $('share-note'),
   zip: $('zip'),
   printToggle: $('print-toggle'),
+  autoPrintToggle: $('auto-print-toggle'),
   paperButtons: [...document.querySelectorAll('#paper-choice button')],
   backupToggle: $('backup-toggle'),
   cameraButtons: [...document.querySelectorAll('#camera-choice button')],
@@ -88,6 +91,7 @@ const els = {
 
 let state = 'idle'; // idle | turn | review
 let reviewUrl = null;
+let printedThisReview = false; // so the automatic print screen doesn't follow a tap on Print
 let reviewLayout = 'grid'; // the layout of the Grid on screen, for printing
 let facing = 'user'; // the camera in use: 'user' (front) or 'environment' (back)
 
@@ -292,11 +296,17 @@ function flash() {
 
 function showReview(file, saved) {
   reviewUrl = URL.createObjectURL(file);
+  printedThisReview = false;
   els.result.src = reviewUrl;
   els.result.hidden = false;
   els.saveWarning.hidden = saved;
   els.print.hidden = !printEnabled();
   setState('review'); // stays on this Grid until someone taps Done
+  if (printEnabled() && autoPrintEnabled()) {
+    const url = reviewUrl;
+    // Skip if they've already tapped Done (or Print) by then.
+    setTimeout(() => state === 'review' && reviewUrl === url && !printedThisReview && onPrint(), AUTO_PRINT_DELAY_MS);
+  }
 }
 
 function endReview() {
@@ -750,6 +760,21 @@ function printEnabled() {
   }
 }
 
+function autoPrintEnabled() {
+  try {
+    return localStorage.getItem(AUTO_PRINT_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+// Opening the print screen by itself only makes sense when printing is on.
+function renderPrintToggles() {
+  els.printToggle.checked = printEnabled();
+  els.autoPrintToggle.checked = autoPrintEnabled();
+  els.autoPrintToggle.disabled = !els.printToggle.checked;
+}
+
 function printPaper() {
   try {
     return localStorage.getItem(PAPER_KEY) === 'a4' ? 'a4' : 'photo';
@@ -775,7 +800,9 @@ function setPageSize(paper) {
 }
 
 function onPrint() {
-  if (reviewUrl) printGrid(reviewUrl, reviewLayout);
+  if (!reviewUrl) return;
+  printedThisReview = true;
+  printGrid(reviewUrl, reviewLayout);
 }
 
 // Prints one Grid (an image URL) on the Host's chosen paper. Used by the review screen and the gallery.
@@ -830,6 +857,14 @@ function setupHost() {
     } catch {
       showMessage('Could not save the printing setting on this device.', { timeoutMs: 4000 });
     }
+    renderPrintToggles();
+  });
+  els.autoPrintToggle.addEventListener('change', () => {
+    try {
+      localStorage.setItem(AUTO_PRINT_KEY, String(els.autoPrintToggle.checked));
+    } catch {
+      showMessage('Could not save the printing setting on this device.', { timeoutMs: 4000 });
+    }
   });
   els.paperButtons.forEach((b) =>
     b.addEventListener('click', () => {
@@ -865,7 +900,7 @@ let unexportedCount = 0;
 async function openHost() {
   endReview();
   closeGallery();
-  els.printToggle.checked = printEnabled();
+  renderPrintToggles();
   renderPaper();
   els.backupToggle.checked = backupEnabled();
   els.host.hidden = false;
