@@ -1,11 +1,12 @@
 // The gallery: every Grid in the current Event as small thumbnails, newest first.
-// Tap one to see it full size.
+// Tap one to see it full size, or tap Select to pick several to share or print.
 //
 // Grids are big (about 1920×2770), so the gallery never shows them at full size in
 // the list: each is shrunk to a small thumbnail once, one at a time, only when it
 // scrolls into view. That keeps memory low on phones and tablets even with hundreds.
 
 import * as store from './store.js';
+import { canShareFiles, shareFiles, toFile, downloadFile, downloadZip } from './exporter.js';
 
 const THUMB_WIDTH = 320;
 const AUTO_CLOSE_MS = 60_000; // close if nobody touches it, so the booth isn't left blocked
@@ -22,6 +23,11 @@ const els = {
   next: $('viewer-next'),
   viewerClose: $('viewer-close'),
   viewerPrint: $('viewer-print'),
+  select: $('gallery-select'),
+  bar: $('selection-bar'),
+  barCount: $('selection-count'),
+  share: $('selection-share'),
+  print: $('selection-print'),
 };
 
 const thumbs = new Map(); // Grid id → Promise of a thumbnail URL (kept between openings)
@@ -32,12 +38,21 @@ let viewerUrl = null;
 let idleTimer = null;
 let observer = null;
 let printing = { canPrint: () => false, print: () => {} };
+let notify = (text) => console.warn(text);
+let selecting = false;
+const selected = new Set(); // Grid ids picked in Select mode
+let printUrls = []; // object URLs of Grids handed to the printer, freed on the next print or on close
 
 // canPrint(): whether the Host has the Print button switched on.
-// print(url, layout): prints one Grid on the Host's chosen paper.
-export function setupGallery({ canPrint, print } = {}) {
+// print([{ url, layout }]): prints Grids on the Host's chosen paper, one sheet each.
+// showMessage(text, options): shows a message to the guests.
+export function setupGallery({ canPrint, print, showMessage } = {}) {
   if (canPrint && print) printing = { canPrint, print };
+  if (showMessage) notify = (text) => showMessage(text, { timeoutMs: 5000 });
   els.close.addEventListener('click', closeGallery);
+  els.select.addEventListener('click', () => setSelecting(!selecting));
+  els.share.addEventListener('click', () => shareSelected().catch((err) => notify(`Couldn't share: ${err.message}`)));
+  els.print.addEventListener('click', () => printSelected().catch((err) => notify(`Couldn't print: ${err.message}`)));
   els.viewerClose.addEventListener('click', closeViewer);
   els.viewerPrint.addEventListener('click', printShown);
   els.prev.addEventListener('click', () => showGrid(viewing - 1));
@@ -57,7 +72,9 @@ export async function openGallery() {
       thumbs.delete(id);
     }
   }
-  els.count.textContent = ids.length ? `${ids.length} Grid${ids.length === 1 ? '' : 's'}` : 'No Grids yet';
+  setSelecting(false);
+  renderCount();
+  els.select.hidden = !ids.length;
   els.list.replaceChildren(
     ...ids.map((id, i) => {
       const tile = document.createElement('button');
@@ -65,7 +82,7 @@ export async function openGallery() {
       tile.className = 'tile';
       tile.dataset.id = id;
       tile.setAttribute('aria-label', `Grid ${ids.length - i}`);
-      tile.addEventListener('click', () => showGrid(i));
+      tile.addEventListener('click', () => (selecting ? toggleSelected(id, tile) : showGrid(i)));
       return tile;
     }),
   );
@@ -77,6 +94,8 @@ export async function openGallery() {
 
 export function closeGallery() {
   closeViewer();
+  setSelecting(false);
+  freePrintUrls();
   observer.disconnect();
   els.list.replaceChildren();
   els.root.hidden = true;
@@ -174,7 +193,7 @@ async function printShown() {
   const img = els.viewerImg;
   await img.decode().catch(() => {});
   const layout = img.naturalHeight > img.naturalWidth * 2 ? 'strip' : 'grid';
-  printing.print(viewerUrl, layout);
+  printing.print([{ url: viewerUrl, layout }]);
 }
 
 function closeViewer() {
@@ -183,4 +202,84 @@ function closeViewer() {
   if (viewerUrl) URL.revokeObjectURL(viewerUrl);
   viewerUrl = null;
   viewing = -1;
+}
+
+// ---------- Select several ----------
+
+function renderCount() {
+  els.count.textContent = selecting
+    ? 'Tap Grids to select'
+    : ids.length
+      ? `${ids.length} Grid${ids.length === 1 ? '' : 's'}`
+      : 'No Grids yet';
+}
+
+function setSelecting(on) {
+  selecting = on;
+  selected.clear();
+  els.list.querySelectorAll('.tile.selected').forEach((t) => {
+    t.classList.remove('selected');
+    t.removeAttribute('aria-pressed');
+  });
+  els.root.classList.toggle('selecting', on);
+  els.select.textContent = on ? 'Cancel' : 'Select';
+  renderCount();
+  renderBar();
+}
+
+function toggleSelected(id, tile) {
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  const on = selected.has(id);
+  tile.classList.toggle('selected', on);
+  tile.setAttribute('aria-pressed', String(on));
+  renderBar();
+}
+
+function renderBar() {
+  els.bar.hidden = !selecting;
+  const n = selected.size;
+  els.barCount.textContent = `${n} selected`;
+  els.share.textContent = canShareFiles() ? 'Share' : 'Download';
+  els.share.disabled = !n;
+  els.print.hidden = !printing.canPrint();
+  els.print.disabled = !n;
+}
+
+// Newest first, the same order as the gallery.
+const selectedIds = () => ids.filter((id) => selected.has(id));
+
+async function shareSelected() {
+  const records = await store.getGrids(selectedIds());
+  if (!records.length) return;
+  const files = records.map(toFile);
+  if (canShareFiles() && navigator.canShare?.({ files })) {
+    await shareFiles(files);
+  } else if (files.length === 1) {
+    downloadFile(files[0]);
+  } else {
+    downloadZip(records);
+  }
+}
+
+async function printSelected() {
+  freePrintUrls();
+  const grids = [];
+  for (const id of selectedIds()) {
+    const blob = await gridBlob(id);
+    if (!blob) continue;
+    const image = await decode(blob);
+    // Strips are one tall column (about 1:4); 2×2 Grids are nearly 3:4.
+    const layout = image.height > image.width * 2 ? 'strip' : 'grid';
+    image.close?.();
+    const url = URL.createObjectURL(blob);
+    printUrls.push(url);
+    grids.push({ url, layout });
+  }
+  if (grids.length) await printing.print(grids);
+}
+
+function freePrintUrls() {
+  printUrls.forEach((u) => URL.revokeObjectURL(u));
+  printUrls = [];
 }
