@@ -28,7 +28,7 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 | Guest | The grey button (bottom left) shows the current props' emoji; tap it to try the next set on the camera; the Turn uses whichever is showing. Goes back to the Host's choice after each Turn. |
 | Guest | **Swipe left/right on the camera** (or tap the ‹ › beside the filter name at the top) to try filters. Goes back to the Host's choice after each Turn. |
 | Guest | Tap **✕ Cancel** (top right) during a Turn to stop it. Nothing from that Turn is saved. |
-| Guest or Host | Tap **▦ Grids** (bottom right) to see every Grid taken so far, newest first. Tap one to see it full size. Closes itself after a minute of no touches. |
+| Guest or Host | Tap **▦ Grids** (bottom right) to see every Grid taken so far, newest first. Tap one to see it full size (with a **Print** button when printing is on). Closes itself after a minute of no touches. |
 | Host | **Press and hold the top-left corner for 3 seconds** to open the Host panel. |
 
 **Host panel**
