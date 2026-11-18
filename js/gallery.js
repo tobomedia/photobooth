@@ -21,6 +21,7 @@ const els = {
   prev: $('viewer-prev'),
   next: $('viewer-next'),
   viewerClose: $('viewer-close'),
+  viewerPrint: $('viewer-print'),
 };
 
 const thumbs = new Map(); // Grid id → Promise of a thumbnail URL (kept between openings)
@@ -30,10 +31,15 @@ let viewing = -1; // index into ids of the Grid shown full size
 let viewerUrl = null;
 let idleTimer = null;
 let observer = null;
+let printing = { canPrint: () => false, print: () => {} };
 
-export function setupGallery() {
+// canPrint(): whether the Host has the Print button switched on.
+// print(url, layout): prints one Grid on the Host's chosen paper.
+export function setupGallery({ canPrint, print } = {}) {
+  if (canPrint && print) printing = { canPrint, print };
   els.close.addEventListener('click', closeGallery);
   els.viewerClose.addEventListener('click', closeViewer);
+  els.viewerPrint.addEventListener('click', printShown);
   els.prev.addEventListener('click', () => showGrid(viewing - 1));
   els.next.addEventListener('click', () => showGrid(viewing + 1));
   els.root.addEventListener('pointerdown', resetIdle);
@@ -157,7 +163,18 @@ async function showGrid(index) {
   if (viewerUrl) URL.revokeObjectURL(viewerUrl);
   viewerUrl = URL.createObjectURL(blob);
   els.viewerImg.src = viewerUrl;
+  els.viewerPrint.hidden = !printing.canPrint();
   els.viewer.hidden = false;
+}
+
+// Strips are one tall column (about 1:4); 2×2 Grids are nearly 3:4. The stored Grid doesn't
+// record its layout, so tell them apart by shape.
+async function printShown() {
+  if (!viewerUrl) return;
+  const img = els.viewerImg;
+  await img.decode().catch(() => {});
+  const layout = img.naturalHeight > img.naturalWidth * 2 ? 'strip' : 'grid';
+  printing.print(viewerUrl, layout);
 }
 
 function closeViewer() {

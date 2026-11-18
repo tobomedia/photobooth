@@ -62,6 +62,7 @@
       <div class="viewer-controls">
         <button id="viewer-prev" class="secondary small" aria-label="Newer">‹</button>
         <button id="viewer-close" class="small">Back</button>
+        <button id="viewer-print" class="secondary small" hidden>Print</button>
         <button id="viewer-next" class="secondary small" aria-label="Older">›</button>
       </div>
     </div>
@@ -132,8 +133,14 @@
       <h3>Printing</h3>
       <label class="toggle">
         <input type="checkbox" id="print-toggle">
-        Show a Print button after each Turn (4 copies per A4 sheet)
+        Show a Print button after each Turn
       </label>
+      <label>Paper</label>
+      <div id="paper-choice">
+        <button type="button" data-paper="photo">4×6″ photo paper<small>1 per Turn (Strips: 2 to cut apart)</small></button>
+        <button type="button" data-paper="a4">A4<small>4 copies with cut lines</small></button>
+      </div>
+      <p class="note">For a Canon Selphy, pick 4×6″, then in the print dialog choose the printer and Postcard (100×148 mm) paper. Android remembers both after the first time. Older Selphys without Wi‑Fi (e.g. CP780): see PRINTING.md.</p>
 
       <h3>App</h3>
       <p id="app-version" class="note"></p>

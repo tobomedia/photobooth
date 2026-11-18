@@ -20,6 +20,7 @@ const CONFIG = {
 };
 
 const PRINT_KEY = 'photobooth.printEnabled';
+const PAPER_KEY = 'photobooth.printPaper'; // 'photo' (100×148 mm postcard, Selphy KP-108IN) or 'a4'
 const BACKUP_KEY = 'photobooth.backupEnabled';
 const CAMERA_KEY = 'photobooth.cameraFacing'; // 'user' (front, default) or 'environment' (back)
 const STYLE_KEY = 'photobooth.gridStyle';
@@ -46,6 +47,7 @@ const els = {
   shareNote: $('share-note'),
   zip: $('zip'),
   printToggle: $('print-toggle'),
+  paperButtons: [...document.querySelectorAll('#paper-choice button')],
   backupToggle: $('backup-toggle'),
   cameraButtons: [...document.querySelectorAll('#camera-choice button')],
   caption: $('caption'),
@@ -748,17 +750,51 @@ function printEnabled() {
   }
 }
 
-async function onPrint() {
-  if (!reviewUrl) return;
-  const imgs = Array.from({ length: 4 }, () => {
+function printPaper() {
+  try {
+    return localStorage.getItem(PAPER_KEY) === 'a4' ? 'a4' : 'photo';
+  } catch {
+    return 'photo';
+  }
+}
+
+function renderPaper() {
+  const paper = printPaper();
+  els.paperButtons.forEach((b) => b.classList.toggle('selected', b.dataset.paper === paper));
+}
+
+// The page size has to be set in an @page rule, so it's swapped in just before printing.
+function setPageSize(paper) {
+  let style = document.getElementById('page-size');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'page-size';
+    document.head.appendChild(style);
+  }
+  style.textContent = `@page { size: ${paper === 'photo' ? '100mm 148mm' : 'A4 portrait'}; margin: 0; }`;
+}
+
+function onPrint() {
+  if (reviewUrl) printGrid(reviewUrl, reviewLayout);
+}
+
+// Prints one Grid (an image URL) on the Host's chosen paper. Used by the review screen and the gallery.
+async function printGrid(url, layout) {
+  // A4: 4 copies with cut lines. 4×6″: one Grid, or two Strips side by side to cut apart.
+  const paper = printPaper();
+  const strip = layout === 'strip';
+  const copies = paper === 'a4' ? 4 : strip ? 2 : 1;
+  setPageSize(paper);
+  els.printSheet.classList.toggle('photo', paper === 'photo');
+  const imgs = Array.from({ length: copies }, () => {
     const cell = document.createElement('div');
     cell.className = 'cell';
     const img = new Image();
-    img.src = reviewUrl;
+    img.src = url;
     cell.appendChild(img);
     return { cell, img };
   });
-  els.printSheet.classList.toggle('strip', reviewLayout === 'strip');
+  els.printSheet.classList.toggle('strip', strip);
   els.printSheet.replaceChildren(...imgs.map((x) => x.cell));
   await Promise.all(imgs.map(({ img }) => img.decode().catch(() => {})));
   window.print();
@@ -795,6 +831,16 @@ function setupHost() {
       showMessage('Could not save the printing setting on this device.', { timeoutMs: 4000 });
     }
   });
+  els.paperButtons.forEach((b) =>
+    b.addEventListener('click', () => {
+      try {
+        localStorage.setItem(PAPER_KEY, b.dataset.paper);
+      } catch {
+        showMessage('Could not save the paper setting on this device.', { timeoutMs: 4000 });
+      }
+      renderPaper();
+    }),
+  );
   els.backupToggle.addEventListener('change', () => {
     try {
       localStorage.setItem(BACKUP_KEY, String(els.backupToggle.checked));
@@ -820,6 +866,7 @@ async function openHost() {
   endReview();
   closeGallery();
   els.printToggle.checked = printEnabled();
+  renderPaper();
   els.backupToggle.checked = backupEnabled();
   els.host.hidden = false;
   renderStyle();
@@ -1016,7 +1063,7 @@ els.messageClose.addEventListener('click', hideMessage);
 document.getElementById('gallery-open').addEventListener('click', () => {
   if (state === 'idle') openGallery().catch((err) => showMessage(`Couldn't open the Grids: ${err.message}`, { timeoutMs: 5000 }));
 });
-setupGallery();
+setupGallery({ canPrint: printEnabled, print: printGrid });
 els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();

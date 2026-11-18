@@ -28,7 +28,7 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 | Guest | The grey button (bottom left) shows the current props' emoji; tap it to try the next set on the camera; the Turn uses whichever is showing. Goes back to the Host's choice after each Turn. |
 | Guest | **Swipe left/right on the camera** (or tap the ‹ › beside the filter name at the top) to try filters. Goes back to the Host's choice after each Turn. |
 | Guest | Tap **✕ Cancel** (top right) during a Turn to stop it. Nothing from that Turn is saved. |
-| Guest or Host | Tap **▦ Grids** (bottom right) to see every Grid taken so far, newest first. Tap one to see it full size. Closes itself after a minute of no touches. |
+| Guest or Host | Tap **▦ Grids** (bottom right) to see every Grid taken so far, newest first. Tap one to see it full size (with a **Print** button when printing is on). Closes itself after a minute of no touches. |
 | Host | **Press and hold the top-left corner for 3 seconds** to open the Host panel. |
 
 **Host panel**
@@ -41,7 +41,7 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 - **Props follow faces** (off by default) — face tracking puts glasses, crowns, hats, ears, halos, flowers and speech bubbles on each person (up to 6) and moves them as people move. If no face is found, props fall back to their fixed places. The Host panel shows how long each face check takes on this device: if it says *slow*, or the camera gets jerky, turn it off. It uses Google's MediaPipe face detector (in `vendor/mediapipe`, about 14 MB, cached for offline use).
 - **Camera** — **Front** (default) or **Back**. Remembered on the device. If the back camera won't start, the booth goes back to the front one and says why. Front is mirrored; back isn't.
 - **Backup** — when on (default on Android/desktop, off on iPhone), each Grid is also downloaded to the device's Downloads folder as it's taken, so a copy survives even if the browser's storage is cleared. On Android it shows up in Google Photos / Gallery.
-- **Printing** — when on, a **Print** button appears after each Turn and prints 4 copies of the Grid on one A4 portrait sheet with cut lines (Strips: 4 side by side, about 5 cm wide). Someone has to tap through the phone's print dialog.
+- **Printing** — when on, a **Print** button appears after each Turn. **Paper**: *4×6″ photo paper* (default: one Grid per sheet, or two Strips side by side to cut apart; for photo printers like the Canon Selphy CP1500) or *A4* (4 copies with cut lines). Someone has to tap Print in the phone's print dialog; choose the printer and Postcard (100×148 mm) paper the first time. A USB-only Selphy like the CP780 can be shared on Wi-Fi with a Raspberry Pi: see [PRINTING.md](PRINTING.md).
 - **Clear & start new Event** — deletes every Grid on the device. Needs a second tap, and warns if anything hasn't been exported.
 
 Timings, Photo size, Grid borders and the default colour are in `CONFIG` at the top of `js/app.js`.
