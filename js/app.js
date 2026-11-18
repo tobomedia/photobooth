@@ -802,28 +802,36 @@ function setPageSize(paper) {
 function onPrint() {
   if (!reviewUrl) return;
   printedThisReview = true;
-  printGrid(reviewUrl, reviewLayout);
+  printGrids([{ url: reviewUrl, layout: reviewLayout }]);
 }
 
-// Prints one Grid (an image URL) on the Host's chosen paper. Used by the review screen and the gallery.
-async function printGrid(url, layout) {
+// Prints Grids (image URLs) on the Host's chosen paper, one sheet each, as one print job.
+// Used by the review screen (one Grid) and the gallery (one, or a selection).
+async function printGrids(grids) {
   // A4: 4 copies with cut lines. 4×6″: one Grid, or two Strips side by side to cut apart.
   const paper = printPaper();
-  const strip = layout === 'strip';
-  const copies = paper === 'a4' ? 4 : strip ? 2 : 1;
   setPageSize(paper);
-  els.printSheet.classList.toggle('photo', paper === 'photo');
-  const imgs = Array.from({ length: copies }, () => {
-    const cell = document.createElement('div');
-    cell.className = 'cell';
-    const img = new Image();
-    img.src = url;
-    cell.appendChild(img);
-    return { cell, img };
+  const imgs = [];
+  const pages = grids.map(({ url, layout }) => {
+    const strip = layout === 'strip';
+    const page = document.createElement('div');
+    page.className = 'page';
+    page.classList.toggle('photo', paper === 'photo');
+    page.classList.toggle('strip', strip);
+    const copies = paper === 'a4' ? 4 : strip ? 2 : 1;
+    for (let i = 0; i < copies; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const img = new Image();
+      img.src = url;
+      cell.appendChild(img);
+      page.appendChild(cell);
+      imgs.push(img);
+    }
+    return page;
   });
-  els.printSheet.classList.toggle('strip', strip);
-  els.printSheet.replaceChildren(...imgs.map((x) => x.cell));
-  await Promise.all(imgs.map(({ img }) => img.decode().catch(() => {})));
+  els.printSheet.replaceChildren(...pages);
+  await Promise.all(imgs.map((img) => img.decode().catch(() => {})));
   window.print();
 }
 
@@ -1098,7 +1106,7 @@ els.messageClose.addEventListener('click', hideMessage);
 document.getElementById('gallery-open').addEventListener('click', () => {
   if (state === 'idle') openGallery().catch((err) => showMessage(`Couldn't open the Grids: ${err.message}`, { timeoutMs: 5000 }));
 });
-setupGallery({ canPrint: printEnabled, print: printGrid });
+setupGallery({ canPrint: printEnabled, print: printGrids, showMessage });
 els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();

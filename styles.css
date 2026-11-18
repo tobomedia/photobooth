@@ -51,21 +51,38 @@ button.danger { background: var(--danger); }
   align-items: center;
   justify-content: center;
   gap: 3vh;
-  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+  padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom);
 }
 
+/* The camera view always has the Photos' shape (3:4, or square for Strips), so what guests see
+   is what gets saved. As big as fits with the Start button and controls below it... */
 #stage {
   position: relative;
-  height: min(72dvh, calc((100vw - 32px) * 4 / 3));
+  height: min(76dvh, calc((100vw - 16px) * 4 / 3));
   aspect-ratio: 3 / 4;
   background: #000;
   border-radius: 12px;
   overflow: hidden;
+  transition: height 300ms ease, border-radius 300ms ease;
 }
 /* Strip layout: square Photos, so a square camera view. */
 body[data-layout="strip"] #stage {
-  height: min(72dvh, calc(100vw - 32px));
+  height: min(76dvh, calc(100vw - 16px));
   aspect-ratio: 1;
+}
+/* ...and during a Turn, when there are no controls, as big as the screen allows: edge to edge,
+   leaving room only for the progress dots. */
+body[data-state="turn"] #booth { gap: 14px; padding-left: 0; padding-right: 0; }
+body[data-state="turn"] #controls { display: none; }
+body[data-state="turn"] #stage {
+  height: min(calc(100dvh - 50px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), calc(100vw * 4 / 3));
+  border-radius: 0;
+}
+body[data-state="turn"][data-layout="strip"] #stage {
+  height: min(calc(100dvh - 50px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 100vw);
+}
+@media (prefers-reduced-motion: reduce) {
+  #stage { transition: none; }
 }
 
 #preview {
@@ -310,6 +327,38 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   overflow: hidden;
 }
 #gallery .tile img { width: 100%; height: 100%; object-fit: contain; display: block; } /* strips are much taller than Grids */
+.gallery-actions { display: flex; gap: 8px; }
+/* Select mode: tap Grids to pick them, then Share or Print from the bar at the bottom. */
+#gallery .tile { position: relative; border: 3px solid transparent; }
+#gallery.selecting .tile:not(.selected) img { opacity: 0.7; }
+#gallery .tile.selected { border-color: var(--accent); }
+#gallery .tile.selected::after {
+  content: "✓";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 30px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+#selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -16px;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  background: #1d1d1d;
+  border-top: 1px solid #333;
+}
+#selection-count { flex: 1; font-weight: 700; }
+#selection-bar button { margin: 0; }
 
 #viewer {
   position: absolute;
@@ -455,15 +504,20 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
 @media print {
   html, body { background: #fff; height: auto; overflow: visible; }
   body > *:not(#print-sheet) { display: none !important; }
-  #print-sheet {
-    display: grid !important;
+  #print-sheet { display: block !important; }
+  /* One .page per sheet of paper; several when printing a selection from the gallery. */
+  #print-sheet .page {
+    display: grid;
     grid-template-columns: 105mm 105mm;
     grid-template-rows: 148.5mm 148.5mm;
     width: 210mm;
     height: 297mm;
+    overflow: hidden;
+    break-after: page;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  #print-sheet .page:last-child { break-after: auto; }
   #print-sheet .cell {
     display: flex;
     align-items: center;
@@ -476,13 +530,13 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   #print-sheet .cell:nth-child(-n + 2) { border-bottom: 0.3mm dashed #bbb; }
   #print-sheet img { max-width: 100%; max-height: 100%; }
   /* Strips: 4 side by side, full height, cut lines between them */
-  #print-sheet.strip { grid-template-columns: repeat(4, 52.5mm); grid-template-rows: 297mm; }
-  #print-sheet.strip .cell { border-bottom: none; border-right: 0.3mm dashed #bbb; padding: 5mm 4mm; }
-  #print-sheet.strip .cell:last-child { border-right-color: transparent; } /* keeps all 4 the same size */
+  #print-sheet .page.strip { grid-template-columns: repeat(4, 52.5mm); grid-template-rows: 297mm; }
+  #print-sheet .page.strip .cell { border-bottom: none; border-right: 0.3mm dashed #bbb; padding: 5mm 4mm; }
+  #print-sheet .page.strip .cell:last-child { border-right-color: transparent; } /* keeps all 4 the same size */
   /* Postcard / 4×6″ photo paper (100×148 mm): one Grid, or two Strips with a cut line between them */
-  #print-sheet.photo { grid-template-columns: 100mm; grid-template-rows: 148mm; width: 100mm; height: 148mm; }
-  #print-sheet.photo .cell { border: none; padding: 3mm; }
-  #print-sheet.photo.strip { grid-template-columns: 50mm 50mm; grid-template-rows: 148mm; }
-  #print-sheet.photo.strip .cell { border-right: 0.3mm dashed #bbb; padding: 3mm 2mm; }
-  #print-sheet.photo.strip .cell:last-child { border-right-color: transparent; }
+  #print-sheet .page.photo { grid-template-columns: 100mm; grid-template-rows: 148mm; width: 100mm; height: 148mm; }
+  #print-sheet .page.photo .cell { border: none; padding: 3mm; }
+  #print-sheet .page.photo.strip { grid-template-columns: 50mm 50mm; grid-template-rows: 148mm; }
+  #print-sheet .page.photo.strip .cell { border-right: 0.3mm dashed #bbb; padding: 3mm 2mm; }
+  #print-sheet .page.photo.strip .cell:last-child { border-right-color: transparent; }
 }

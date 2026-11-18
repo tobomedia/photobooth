@@ -54,9 +54,17 @@
   <section id="gallery" hidden aria-label="Grids taken so far">
     <header>
       <h2 id="gallery-count"></h2>
-      <button id="gallery-close" class="secondary small">Close</button>
+      <div class="gallery-actions">
+        <button id="gallery-select" class="secondary small">Select</button>
+        <button id="gallery-close" class="secondary small">Close</button>
+      </div>
     </header>
     <div id="gallery-list"></div>
+    <div id="selection-bar" hidden>
+      <span id="selection-count"></span>
+      <button id="selection-share" class="small">Share</button>
+      <button id="selection-print" class="small">Print</button>
+    </div>
     <div id="viewer" hidden>
       <img id="viewer-img" alt="Grid">
       <div class="viewer-controls">
