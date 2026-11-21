@@ -63,11 +63,11 @@ sudo lpinfo -v | grep -i usb     # the printer: only shows up when it's plugged 
 sudo lpinfo -m | grep -i cp780   # the driver: always there once step 2 is done
 ```
 
-You should see something like `usb://Canon/CP780?serial=…` and `gutenprint.5.3://canon-cp780/expert`. Add it, pasting your own USB address in place of the example:
+You should see something like `gutenprint53+usb://canon-cp780/DI0002230000XXXX` and `gutenprint.5.3://canon-cp780/expert`. Add it, pasting your own USB address in place of the example:
 
 ```sh
 sudo lpadmin -p Selphy -E \
-  -v "usb://Canon/CP780?serial=XXXX" \
+  -v "gutenprint53+usb://canon-cp780/DI0002230000XXXX" \
   -m "gutenprint.5.3://canon-cp780/expert" \
   -D "Canon SELPHY CP780" \
   -o printer-is-shared=true
@@ -82,6 +82,47 @@ lpoptions -p Selphy -l | grep -i pagesize
 
 If it isn't, run `sudo lpadmin -p Selphy -o PageSize=Postcard`.
 
+### Fix the Selphy driver (needed on Raspberry Pi OS trixie)
+
+The Gutenprint package in Raspberry Pi OS / Debian trixie is a 2022 snapshot (5.3.4). It has a bug in its check that the right paper is loaded, so **every** CP780 print fails with this, even with the correct postcard paper and ink:
+
+```
+Incorrect paper loaded (01 vs 11), aborting job!
+```
+
+Gutenprint fixed this in 2023, but the fix isn't in the Debian package yet. Build just the USB part of the driver (the "backend") from the current Gutenprint source and swap it in. Everything else, including the paper sizes, stays as installed. On the Pi:
+
+```sh
+sudo apt install -y git build-essential pkg-config libusb-1.0-0-dev libcups2-dev
+git clone --depth 1 https://git.code.sf.net/p/gimp-print/source ~/gutenprint-src
+mkdir -p ~/selphy-backend && cd ~/selphy-backend
+cp ~/gutenprint-src/src/cups/backend_*.[ch] . && : > config.h
+gcc -O2 -I. -DCORRTABLE_PATH='"/usr/share/gutenprint/5.3/backend_data"' \
+  -DUSE_DLOPEN -DLIBUSB_PRE_1_0_10 $(pkg-config --cflags libusb-1.0) \
+  -o gutenprint53+usb backend_*.c $(pkg-config --libs libusb-1.0) -ldl
+./gutenprint53+usb -h 2>&1 | grep "Backend version"   # should be 0.134G or newer
+```
+
+The clone can take a few minutes. Then install it, keeping Debian's original as a backup. `dpkg-divert` stops a future `apt upgrade` from putting the buggy version back:
+
+```sh
+B=/usr/lib/cups/backend/gutenprint53+usb
+sudo dpkg-divert --local --rename --divert $B.debian --add $B
+sudo install -o root -g root -m 700 ~/selphy-backend/gutenprint53+usb $B
+```
+
+To undo it: `sudo rm $B && sudo dpkg-divert --rename --remove $B`.
+
+**Checking what the printer sees.** This asks the printer which paper and ink it has loaded:
+
+```sh
+sudo env BACKEND=canonselphy DYESUB_DEBUG=2 /usr/lib/cups/backend/gutenprint53+usb -s 2>&1 | grep "<-" | head -1
+```
+
+Look at the 7th pair of digits in the reply, e.g. `01 00 00 00 00 00 11 00 00 00 00 01`. The first digit is the paper tray, the second the ink cassette: `1` = P/postcard, `0` = nothing detected. So `11` is ready, and `10` means the ink isn't seated (take it out and click it back in). The 3rd pair is an error code: `00` fine, `01` out of paper, `04` ink problem, `08` ink used up.
+
+If a print fails, CUPS pauses the printer. After fixing the cause, start it again with `sudo cupsenable Selphy`, or from the web page at `http://photobooth-printer.local:631/printers/Selphy`.
+
 Test print (any photo will do):
 
 ```sh
@@ -89,7 +130,7 @@ wget -O test.jpg https://picsum.photos/1000/1480
 lp -d Selphy -o fit-to-page test.jpg
 ```
 
-If the CP780 doesn't print, try the CP520 driver instead (`sudo lpinfo -m | grep -i cp520`, then repeat `lpadmin` with that model). Some people find it works better for the CP7xx series.
+If the CP780 doesn't print, check the error at `http://photobooth-printer.local:631/printers/Selphy` and the printer check in the section above.
 
 ## Testing before the printer arrives
 
@@ -112,8 +153,10 @@ Then connect the tablet (step 4) and print from the booth. The job should show a
 When the printer arrives, plug it in, find its address with `sudo lpinfo -v | grep -i usb`, and switch the same printer over to it:
 
 ```sh
-sudo lpadmin -p Selphy -v "usb://Canon/CP780?serial=XXXX"
+sudo lpadmin -p Selphy -v "gutenprint53+usb://canon-cp780/DI0002230000XXXX"
 ```
+
+Then do the driver fix in step 3 if you haven't already.
 
 The name doesn't change, so the tablet doesn't need setting up again.
 
