@@ -53,6 +53,16 @@ export async function getGrids(ids) {
   });
 }
 
+// Deletes some Grids for good (the Host's "Manage Grids").
+export async function deleteGrids(ids) {
+  await run('readwrite', (s) => {
+    ids.forEach((id) => s.delete(id));
+  });
+  const exported = exportedIds();
+  ids.forEach((id) => exported.delete(id));
+  writeExported(exported);
+}
+
 export async function clearEvent() {
   await run('readwrite', (s) => s.clear());
   writeExported(new Set());

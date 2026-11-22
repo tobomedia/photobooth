@@ -44,6 +44,7 @@ const els = {
   hotspot: $('host-hotspot'),
   host: $('host'),
   hostClose: $('host-close'),
+  manageGrids: $('manage-grids'),
   hostCount: $('host-count'),
   shareBatches: $('share-batches'),
   shareNote: $('share-note'),
@@ -859,6 +860,12 @@ function setupHost() {
     els.host.hidden = true;
     disarmClear();
   });
+  // The Grids view with Delete; closing it comes back here.
+  els.manageGrids.addEventListener('click', () => {
+    els.host.hidden = true;
+    disarmClear();
+    openGallery({ manage: true }).catch((err) => showMessage(`Couldn't open the Grids: ${err.message}`, { timeoutMs: 5000 }));
+  });
   els.printToggle.addEventListener('change', () => {
     try {
       localStorage.setItem(PRINT_KEY, String(els.printToggle.checked));
@@ -1106,7 +1113,7 @@ els.messageClose.addEventListener('click', hideMessage);
 document.getElementById('gallery-open').addEventListener('click', () => {
   if (state === 'idle') openGallery().catch((err) => showMessage(`Couldn't open the Grids: ${err.message}`, { timeoutMs: 5000 }));
 });
-setupGallery({ canPrint: printEnabled, print: printGrids, showMessage });
+setupGallery({ canPrint: printEnabled, print: printGrids, showMessage, onManageClose: openHost });
 els.print.addEventListener('click', onPrint);
 document.addEventListener('visibilitychange', keepAwake);
 setupHost();

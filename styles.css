@@ -315,6 +315,7 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-auto-rows: max-content; /* each row as tall as its tiles, however little room the list has */
   gap: 10px;
   align-content: start;
   padding-bottom: max(16px, env(safe-area-inset-bottom));
@@ -322,6 +323,7 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
 #gallery .tile {
   padding: 0;
   border-radius: 6px;
+  box-sizing: border-box;
   aspect-ratio: 1920 / 2770;
   background: #222;
   overflow: hidden;
@@ -358,6 +360,7 @@ body:not([data-state="idle"]) #gallery-open { display: none; }
   border-top: 1px solid #333;
 }
 #selection-count { flex: 1; font-weight: 700; }
+#selection-bar { flex-wrap: wrap; }
 #selection-bar button { margin: 0; }
 
 #viewer {

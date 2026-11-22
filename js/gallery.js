@@ -1,5 +1,6 @@
 // The gallery: every Grid in the current Event as small thumbnails, newest first.
 // Tap one to see it full size, or tap Select to pick several to share or print.
+// Opened from the Host panel ("Manage Grids") it also offers Delete.
 //
 // Grids are big (about 1920×2770), so the gallery never shows them at full size in
 // the list: each is shrunk to a small thumbnail once, one at a time, only when it
@@ -28,6 +29,8 @@ const els = {
   barCount: $('selection-count'),
   share: $('selection-share'),
   print: $('selection-print'),
+  del: $('selection-delete'),
+  viewerDelete: $('viewer-delete'),
 };
 
 const thumbs = new Map(); // Grid id → Promise of a thumbnail URL (kept between openings)
@@ -42,14 +45,29 @@ let notify = (text) => console.warn(text);
 let selecting = false;
 const selected = new Set(); // Grid ids picked in Select mode
 let printUrls = []; // object URLs of Grids handed to the printer, freed on the next print or on close
+let managing = false; // opened from the Host panel: Delete is offered
+let onManageClose = () => {};
+const CONFIRM_MS = 4000; // Delete needs a second tap within this time
 
 // canPrint(): whether the Host has the Print button switched on.
 // print([{ url, layout }]): prints Grids on the Host's chosen paper, one sheet each.
 // showMessage(text, options): shows a message to the guests.
-export function setupGallery({ canPrint, print, showMessage } = {}) {
+// onManageClose(): called when the Host closes the gallery they opened from the Host panel.
+export function setupGallery({ canPrint, print, showMessage, onManageClose: back } = {}) {
   if (canPrint && print) printing = { canPrint, print };
   if (showMessage) notify = (text) => showMessage(text, { timeoutMs: 5000 });
-  els.close.addEventListener('click', closeGallery);
+  if (back) onManageClose = back;
+  els.close.addEventListener('click', () => {
+    const wasManaging = managing;
+    closeGallery();
+    if (wasManaging) onManageClose();
+  });
+  els.del.addEventListener('click', () =>
+    confirmTap(els.del, () => deleteIds(selectedIds())).catch((err) => notify(`Couldn't delete: ${err.message}`)),
+  );
+  els.viewerDelete.addEventListener('click', () =>
+    confirmTap(els.viewerDelete, () => deleteIds([ids[viewing]])).catch((err) => notify(`Couldn't delete: ${err.message}`)),
+  );
   els.select.addEventListener('click', () => setSelecting(!selecting));
   els.share.addEventListener('click', () => shareSelected().catch((err) => notify(`Couldn't share: ${err.message}`)));
   els.print.addEventListener('click', () => printSelected().catch((err) => notify(`Couldn't print: ${err.message}`)));
@@ -63,7 +81,10 @@ export function setupGallery({ canPrint, print, showMessage } = {}) {
 
 export const galleryOpen = () => !els.root.hidden;
 
-export async function openGallery() {
+// manage: opened by the Host, so Delete is offered.
+export async function openGallery({ manage = false } = {}) {
+  managing = manage;
+  els.root.classList.toggle('managing', manage);
   ids = (await store.listGridIds()).reverse();
   // Forget thumbnails of Grids that have been cleared.
   for (const [id, url] of thumbs) {
@@ -82,7 +103,7 @@ export async function openGallery() {
       tile.className = 'tile';
       tile.dataset.id = id;
       tile.setAttribute('aria-label', `Grid ${ids.length - i}`);
-      tile.addEventListener('click', () => (selecting ? toggleSelected(id, tile) : showGrid(i)));
+      tile.addEventListener('click', () => (selecting ? toggleSelected(id, tile) : showGrid(ids.indexOf(id))));
       return tile;
     }),
   );
@@ -93,6 +114,8 @@ export async function openGallery() {
 }
 
 export function closeGallery() {
+  managing = false;
+  els.root.classList.remove('managing');
   closeViewer();
   setSelecting(false);
   freePrintUrls();
@@ -183,6 +206,8 @@ async function showGrid(index) {
   viewerUrl = URL.createObjectURL(blob);
   els.viewerImg.src = viewerUrl;
   els.viewerPrint.hidden = !printing.canPrint();
+  els.viewerDelete.hidden = !managing;
+  resetConfirm(els.viewerDelete);
   els.viewer.hidden = false;
 }
 
@@ -244,6 +269,58 @@ function renderBar() {
   els.share.disabled = !n;
   els.print.hidden = !printing.canPrint();
   els.print.disabled = !n;
+  els.del.hidden = !managing;
+  els.del.disabled = !n;
+  resetConfirm(els.del);
+}
+
+// ---------- Delete (Host only) ----------
+
+// First tap asks "Tap again to delete"; a second tap within a few seconds does it.
+function confirmTap(button, action) {
+  if (button.dataset.armed) {
+    resetConfirm(button);
+    return action();
+  }
+  button.dataset.label = button.textContent;
+  button.dataset.armed = 'yes';
+  const n = button === els.del ? selected.size : 1;
+  button.textContent = `Delete ${n === 1 ? 'this Grid' : `${n} Grids`}? Tap again`;
+  button._timer = setTimeout(() => resetConfirm(button), CONFIRM_MS);
+  return Promise.resolve();
+}
+
+function resetConfirm(button) {
+  clearTimeout(button._timer);
+  if (button.dataset.armed) button.textContent = button.dataset.label;
+  delete button.dataset.armed;
+}
+
+async function deleteIds(list) {
+  list = list.filter((id) => id != null);
+  if (!list.length) return;
+  await store.deleteGrids(list);
+  const gone = new Set(list);
+  for (const id of gone) {
+    thumbs.get(id)?.then((u) => u && URL.revokeObjectURL(u));
+    thumbs.delete(id);
+    selected.delete(id);
+    els.list.querySelector(`.tile[data-id="${id}"]`)?.remove();
+  }
+  const shownId = ids[viewing];
+  const shownIndex = viewing;
+  ids = ids.filter((id) => !gone.has(id));
+  els.list.querySelectorAll('.tile').forEach((tile, i) => tile.setAttribute('aria-label', `Grid ${ids.length - i}`));
+  els.select.hidden = !ids.length;
+  if (!ids.length && selecting) setSelecting(false);
+  renderCount();
+  renderBar();
+  notify(`Deleted ${list.length} Grid${list.length === 1 ? '' : 's'}.`);
+  if (shownIndex >= 0 && gone.has(shownId)) {
+    // Show the next one along, or go back to the list if that was the last.
+    if (ids.length) showGrid(Math.min(shownIndex, ids.length - 1));
+    else closeViewer();
+  }
 }
 
 // Newest first, the same order as the gallery.
