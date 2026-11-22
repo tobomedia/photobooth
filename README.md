@@ -29,6 +29,7 @@ When you change files later, bump `VERSION` in `sw.js` so devices fetch the new 
 | Guest | **Swipe left/right on the camera** (or tap the ‹ › beside the filter name at the top) to try filters. Goes back to the Host's choice after each Turn. |
 | Guest | Tap **✕ Cancel** (top right) during a Turn to stop it. Nothing from that Turn is saved. |
 | Guest or Host | Tap **▦ Grids** (bottom right) to see every Grid taken so far, newest first. Tap one to see it full size (with a **Print** button when printing is on), or tap **Select**, pick several and **Share** or **Print** them together. Closes itself after a minute of no touches. |
+| Host | Host panel → **Manage Grids** opens the same view with **Delete**: in Select mode for several Grids, or on a single Grid shown full size. Needs a second tap to confirm. Closing it goes back to the Host panel. |
 | Host | **Press and hold the top-left corner for 3 seconds** to open the Host panel. |
 
 **Host panel**
